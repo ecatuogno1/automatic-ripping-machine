@@ -10,8 +10,8 @@
             <div class="input-group-prepend">
                 <span class="input-group-text" id="{{ k }}">{{ k }}: </span>
             </div>
-            <input type="text" class="form-control" aria-label="{{ k }}" name="{{ k }}" placeholder="{{ v }}"
-                   value="{{ v }}" aria-describedby="{{ k }}"
+            <input type="text" class="form-control" aria-label="{{ k }}" name="{{ k }}" placeholder="{{ v if v is not none }}"
+                   value="{{ v if v is not none }}" aria-describedby="{{ k }}"
                    {% if apprise_read_only %}
                      disabled="" title="apprise.yaml is read-only"
                    {% endif %}>

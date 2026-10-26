@@ -36,6 +36,7 @@ from arm.models.system_drives import SystemDrives
 from arm.models.system_info import SystemInfo
 from arm.models.ui_settings import UISettings
 import arm.config.config as cfg
+from arm.config import config_utils
 from arm.ui.settings import DriveUtils as drive_utils
 from arm.ui.forms import SettingsForm, UiSettingsForm, AbcdeForm, SystemInfoDrives
 from arm.ui.settings.ServerUtil import ServerUtil
@@ -183,19 +184,14 @@ def save_settings():
     Method - POST
     Overview - Save arm ripper settings from post. Not a user page
     """
-    # Load up the comments.json, so we can comment the arm.yaml
-    comments = ui_utils.generate_comments()
     success = False
-    arm_cfg = {}
     form = SettingsForm()
     if form.validate_on_submit():
-        # Build the new arm.yaml with updated values from the user
-        arm_cfg = ui_utils.build_arm_cfg(request.form.to_dict(), comments)
-        # Save updated arm.yaml
+        # Posted fields over the current settings: keys the page did not post are kept, untouched
+        # fields keep their type, and the file is only replaced with text that loads back unchanged
+        values = config_utils.merge_form(cfg.arm_config, request.form.to_dict())
         try:
-            with open(cfg.arm_config_path, "w") as settings_file:
-                settings_file.write(arm_cfg)
-                settings_file.close()
+            ui_utils.save_arm_cfg(values)
             success = True
             importlib.reload(cfg)
             # Set the ARM Log level to the config
@@ -204,6 +200,8 @@ def save_settings():
         except OSError as e:
             # arm.yaml is read-only
             app.logger.error(f"{cfg.arm_config_path} is read-only", exc_info=e)
+        except ValueError as e:
+            app.logger.error(f"arm.yaml was not saved: {e}")
 
     # Don't echo the settings back: arm.yaml holds API keys and the page logs this response to the console
     return {'success': success, 'form': 'arm ripper settings'}
@@ -284,18 +282,16 @@ def save_apprise_cfg():
     success = False
     # Since we can't be sure of any values, we can't validate it
     if request.method == 'POST':
-        # Save updated apprise.yaml
-        # Build the new arm.yaml with updated values from the user
-        apprise_cfg = ui_utils.build_apprise_cfg(request.form.to_dict())
+        # Save updated apprise.yaml; keys not posted keep their current value
+        values = config_utils.merge_form(cfg.apprise_config, request.form.to_dict())
         try:
-            with open(cfg.apprise_config_path, "w") as settings_file:
-                settings_file.write(apprise_cfg)
-                settings_file.close()
+            config_utils.write_yaml_file(cfg.apprise_config_path, ui_utils.build_apprise_cfg(values), values)
             success = True
             importlib.reload(cfg)
         except OSError as e:
             app.logger.error(f"{cfg.apprise_config_path} is read-only", exc_info=e)
-    # If we get to here there was no post data
+        except ValueError as e:
+            app.logger.error(f"apprise.yaml was not saved: {e}")
     # Don't echo the settings back: apprise.yaml holds notification service tokens
     return {'success': success, 'form': 'Apprise config'}
 
