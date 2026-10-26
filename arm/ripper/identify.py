@@ -30,11 +30,15 @@ def find_mount(devpath: str) -> str | None:
 
     :return: Absolute path of mountpoint as ``str`` if any, else ``None``
     """
-    # findmnt exits 1 when nothing is mounted, which is normal before ARM mounts the disc
-    if output := arm_subprocess(["findmnt", "--json", devpath], expected_returncodes=(1,),
+    # findmnt exits 1 when nothing is mounted, which is normal before ARM mounts the disc.
+    # --source: without it findmnt also matches a mount whose *target* is devpath, such as the
+    # device node bind-mounted into an LXC container, and that is not the disc's filesystem (#1784)
+    if output := arm_subprocess(["findmnt", "--json", "--source", devpath], expected_returncodes=(1,),
                                 timeout=identify_timeout()):
         mountpoints = json.loads(output)
         for mountpoint in mountpoints["filesystems"]:
+            if mountpoint["target"] == devpath:
+                continue
             if os.access(mountpoint["target"], os.R_OK):
                 return mountpoint["target"]
     return None
