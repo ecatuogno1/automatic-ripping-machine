@@ -8,6 +8,7 @@ already succeeded and the files stay where they are.
 import logging
 import os
 import re
+import unicodedata
 
 import requests
 
@@ -120,3 +121,82 @@ def _import(job):
         return False
     logging.info(f"{name} accepted the import of {body['path']}")
     return True
+
+
+# Catalog lookups used by identify (ARR_IDENTIFY): (arm.yaml prefix, lookup path, ARM video type)
+LOOKUPS = (("RADARR", "/api/v3/movie/lookup", "movie"), ("SONARR", "/api/v3/series/lookup", "series"))
+
+
+def _title_keys(title):
+    """Comparable forms of a title: lower-case letters and digits only, with and without a leading article."""
+    text = unicodedata.normalize("NFKD", str(title or "")).encode("ascii", "ignore").decode().casefold()
+    text = re.sub(r"[^a-z0-9 ]", "", text.replace("&", "and"))
+    words = text.split()
+    keys = {"".join(words)}
+    if len(words) > 1 and words[0] in ("the", "a", "an"):
+        keys.add("".join(words[1:]))
+    return keys - {""}
+
+
+def _search(prefix, path, term):
+    """An app's lookup results for a search term; [] when the app isn't configured or doesn't answer."""
+    settings = connection(prefix)
+    if settings is None:
+        return []
+    url, credential = settings
+    try:
+        response = requests.get(url + path, params={"term": term}, headers={"X-Api-Key": credential},
+                                timeout=TIMEOUT)
+        response.raise_for_status()
+        results = response.json()
+    except (requests.exceptions.RequestException, ValueError) as error:
+        logging.warning(f"{prefix.capitalize()} lookup failed ({type(error).__name__})")
+        return []
+    return [r for r in results if isinstance(r, dict) and isinstance(r.get("year"), int)] \
+        if isinstance(results, list) else []
+
+
+def _is_titled(result, wanted):
+    """Whether a lookup result's title, original title or an alternate title is one of the wanted keys."""
+    names = [result.get("title"), result.get("originalTitle")]
+    names += [alt.get("title") for alt in result.get("alternateTitles") or [] if isinstance(alt, dict)]
+    return any(_title_keys(name) & wanted for name in names)
+
+
+def _candidates(term):
+    """Lookup results from every configured app whose title or alternate title is the searched title."""
+    wanted = _title_keys(term)
+    return [(video_type, result) for prefix, path, video_type in LOOKUPS
+            for result in _search(prefix, path, term) if _is_titled(result, wanted)]
+
+
+def lookup(title, year=None):
+    """
+    Identify a title with the Radarr/Sonarr lookup when OMDb/TMDB found nothing (ARR_IDENTIFY).\n
+    Only a result whose title is the searched title counts. Several such results are narrowed
+    down by the year (or the year before, as a disc often comes out a year after the film);
+    if that doesn't leave exactly one, nothing is chosen.
+    :param title: title to search, words may be separated by "+", "_" or "-"
+    :param year: release year if known
+    :return: OMDb-style {"Search": [result]} like the other providers, or None
+    """
+    if not cfg.arm_config.get("ARR_IDENTIFY"):
+        return None
+    term = re.sub(r"[+_-]+", " ", str(title or "")).strip()
+    if not _title_keys(term):
+        return None
+    found = _candidates(term)
+    year = int(year) if str(year or "").isdigit() else None
+    if len(found) > 1 and year:
+        found = ([c for c in found if c[1]["year"] == year]
+                 or [c for c in found if c[1]["year"] == year - 1])
+    if len(found) != 1:
+        if found:
+            logging.info(f"Radarr/Sonarr lookup for '{term}' found {len(found)} titles with that name, choosing none")
+        return None
+    video_type, result = found[0]
+    poster = next((image.get("remoteUrl") for image in result.get("images") or []
+                   if isinstance(image, dict) and image.get("coverType") == "poster"), None)
+    logging.info(f"Radarr/Sonarr lookup identified '{term}' as {result.get('title')} ({result['year']})")
+    return {"Search": [{"Title": str(result.get("title")), "Year": str(result["year"]), "Type": video_type,
+                        "imdbID": result.get("imdbId") or "", "Poster": poster or ""}]}

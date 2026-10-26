@@ -55,3 +55,13 @@ ARR_PATH_MAP: "/home/arm/media/completed=/data/completed;/home/arm/music=/data/m
 ```
 
 The first pair whose ARM path the folder is under is used. Paths that match no pair are sent unchanged.
+
+## Identifying discs with Radarr and Sonarr
+
+Set `ARR_IDENTIFY: true` to use Radarr's and Sonarr's own title lookup as an extra source when OMDb or TMDB
+(`METADATA_PROVIDER`) find nothing for a disc. This also works without an OMDb or TMDB API key.
+
+ARM searches with the disc's title and only accepts a result whose title (or one of its alternate titles) is that
+title, ignoring case, punctuation and a leading "The"/"A"/"An". If several movies or series have that title, the
+disc's year (or the year before) must pick exactly one, otherwise ARM chooses none and the disc keeps its label, so
+you can set the title on the job page as usual.

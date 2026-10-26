@@ -16,7 +16,7 @@ import xml.parsers.expat
 import arm.config.config as cfg
 from arm.models import Job
 
-from arm.ripper import utils
+from arm.ripper import arr, utils
 from arm.ripper.ProcessHandler import arm_subprocess
 from arm.ui import db
 
@@ -300,6 +300,26 @@ def get_video_details(job):
         identify_loop(job, None, title, year)
     except Exception as error:
         logging.info(f"Identification failed with the error: {error}. Continuing...")
+    if not job.hasnicetitle:
+        try_arr_lookup(job, title, year)
+
+
+def try_arr_lookup(job, title, year):
+    """
+    Last resort when OMDb/TMDB found nothing: the Radarr/Sonarr lookup, if ARR_IDENTIFY is on
+    :param job: job obj
+    :param title: title searched for
+    :param year: year if known
+    :return: search results in OMDb format, or None
+    """
+    try:
+        search_results = arr.lookup(title, year)
+        if search_results is not None:
+            update_job(job, search_results)
+        return search_results
+    except Exception as error:  # an optional extra source must never stop identification
+        logging.info(f"Radarr/Sonarr lookup failed with the error: {error}. Continuing...")
+        return None
 
 
 def update_job(job, search_results):
