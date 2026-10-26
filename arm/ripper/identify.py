@@ -24,6 +24,23 @@ from arm.ui import db
 from arm.ui import utils as ui_utils
 
 
+# Aspect, region and edition markers studios append to DVD labels: 16X9/169, 4X3, WS/FS,
+# LB/FF (letterbox/full frame), NA, SE/CE/SCE, DOMESTIC, UNRATED, UNCUT. Only whole trailing
+# tokens are removed, so a title that ends in a number (BLADE_RUNNER_2049) keeps it.
+LABEL_MARKERS = re.compile(
+    r"[_\s-]+(?:16X?9|4X3|WS|FS|LB|FF|N[_\s]?A|WIDESCREEN|FULLSCREEN|S?CE|SE|DOMESTIC|UNRATED|UNCUT)$",
+    re.IGNORECASE,
+)
+
+
+def strip_label_markers(label):
+    """Remove trailing aspect/edition marker tokens from a disc label."""
+    title = str(label)
+    while LABEL_MARKERS.search(title):
+        title = LABEL_MARKERS.sub("", title)
+    return title
+
+
 def find_mount(devpath: str) -> str | None:
     """
     Find existing, readable mountpoint for ``devpath`` by calling ``findmnt``
@@ -233,8 +250,8 @@ def identify_dvd(job):
     # in this block we want to strip out any chars that might be bad
     # strip all non-numeric chars and use that for year
     year = re.sub(r"\D", "", str(job.year)) if job.year else None
-    # next line is not really needed, but we don't want to leave an x somewhere
-    dvd_title = job.label.replace("16x9", "")
+    # drop aspect/edition markers the studio appended to the label (THE_MATRIX_16X9_WS)
+    dvd_title = strip_label_markers(job.label)
     logging.debug(f"dvd_title ^a-z _-: {dvd_title}")
     # rip out any SKU's at the end of the line
     dvd_title = re.sub(r"SKU\b", "", dvd_title)
