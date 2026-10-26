@@ -71,7 +71,7 @@ function pull_image() {
 
 function setup_mountpoints() {
     echo -e "${RED}Creating mount points${NC}"
-    for dev in /dev/sr?; do
+    for dev in /dev/sr[0-9]*; do
         mkdir -p "/mnt$dev"
     done
     chown arm:arm /mnt/dev/sr*
