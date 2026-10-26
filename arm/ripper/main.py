@@ -26,7 +26,7 @@ if find_spec("arm") is None:
 import arm.config.config as cfg  # noqa E402
 from arm.models.config import Config  # noqa: E402
 from arm.models.job import Job, JobState  # noqa: E402
-from arm.models.system_drives import SystemDrives  # noqa: E402
+from arm.models.system_drives import CDS, SystemDrives  # noqa: E402
 from arm.ripper import (arm_ripper, identify, logger,  # noqa: E402
                         music_brainz, utils)
 from arm.ripper.ARMInfo import ARMInfo  # noqa E402
@@ -188,7 +188,11 @@ def setup():
         logging.info(msg)
         time.sleep(1)
     else:  # no break
-        raise utils.RipperException(f"Timed out waiting for drive to be ready (ioctl tray status: {drive.tray}).")
+        message = f"Timed out waiting for drive to be ready (ioctl tray status: {drive.tray})."
+        if drive.tray in (CDS.TRAY_OPEN, CDS.NO_DISC):
+            # An open or empty tray (e.g. the change event after an eject) has nothing to rip.
+            raise utils.LaunchSkipped(message)
+        raise utils.RipperException(message)
 
     # ARM Job starts
     # Create new job
@@ -243,6 +247,10 @@ if __name__ == "__main__":
     try:
         setup()
         main()
+    except utils.LaunchSkipped as error:
+        # No job was started, so there is no failed rip to report or disc to eject.
+        logging.warning(f"No job started: {error}")
+        job = None
     except Exception as error:
         logging.critical("A fatal error has occurred and ARM is exiting.")
         print_stacktrace = (

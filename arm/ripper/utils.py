@@ -36,6 +36,14 @@ class RipperException(Exception):
     pass
 
 
+class LaunchSkipped(RipperException):
+    """
+    This run never started a job, e.g. a repeated udev event for a disc that is already
+    being ripped, or the change event that follows an eject. Nothing failed, so it is
+    logged but not reported as a failed rip.
+    """
+
+
 def notify(job, title: str, body: str):
     """
     Send notifications with apprise\n
@@ -787,7 +795,7 @@ def duplicate_run_check(dev_path):
     logging.info(f"Job was started {job_time}min ago.")
     if (job_time) < 3:
         logging.info("Job was started less than 3min ago.")
-    raise RipperException(f"Job already running on {dev_path}")
+    raise LaunchSkipped(f"Job already running on {dev_path}")
 
 
 def save_disc_poster(final_directory, job):
