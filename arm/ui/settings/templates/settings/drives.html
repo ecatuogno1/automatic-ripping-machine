@@ -140,7 +140,8 @@
                                                 <a href="drive/manual/{{ drive.drive_id }}" class="btn btn-secondary btn-sm text-nowrap">
                                                     Manual
                                                 </a>
-                                                <a href="drive/remove/{{ drive.drive_id }}" class="btn btn-outline-danger btn-sm text-nowrap">
+                                                <a href="drive/remove/{{ drive.drive_id }}" class="btn btn-outline-danger btn-sm text-nowrap"
+                                                   data-confirm="Remove {{ drive.name }} ({{ drive.mount }}) from ARM?">
                                                     Remove
                                                 </a>
                                             </div>

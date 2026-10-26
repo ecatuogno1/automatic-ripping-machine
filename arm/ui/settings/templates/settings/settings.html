@@ -147,6 +147,12 @@
             $(".popovers").popover({
                 trigger: "hover",
             });
+            // Removing a drive happens on click, so ask first (the text names the drive)
+            $(document).on("click", "a[data-confirm]", function (e) {
+                if (!window.confirm(this.dataset.confirm)) {
+                    e.preventDefault();
+                }
+            });
             {% if form.errors %}
                 {% for k in form.errors %}
                     $("[name='{{k}}']").addClass("is-invalid");
