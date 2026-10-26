@@ -31,6 +31,7 @@
 
    - **Configuration Files**
       - [arm.yaml](Config-arm.yaml)
+        - [Disc identification](Config-Disc-Identification)
       - [apprise.yaml](Config-apprise.yaml)
       - [.abcde.conf](Config-abcde.conf)
       - [Skins for ARM ui](Config-ui-skins)
