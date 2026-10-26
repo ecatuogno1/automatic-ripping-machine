@@ -45,6 +45,7 @@ If you use an unsupported operating system and can't or don't want to reimage, t
     - Send notifications on updates via IFTTT, Pushbullet, Pushover, Discord, Slack, Telegram and many more!
   - If audio (CD) - rip using abcde  (get discdata and album art from musicbrainz)
   - If data (Blu-Ray, DVD, or CD) - make an ISO backup
+    - Game discs (PlayStation, PlayStation 2, Xbox, GameCube, Wii, Dreamcast) are recognised from the disc and the job is named after the platform, e.g. "DISC_LABEL (PlayStation 2)", and the log says what was found; the ISO is made the same way
 - Headless, designed to be run from a server
 - Ripping from multiple-optical drives in parallel
 - HTML UI to interact with ripping jobs, view logs, etc
