@@ -42,7 +42,10 @@ dictConfig({
 app = Flask(__name__)
 csrf = CSRFProtect()
 csrf.init_app(app)
-CORS(app, resources={r"/*": {"origins": "*", "send_wildcard": "False"}})
+# Only the job list (/json?mode=joblist) is readable cross-origin, so another ARM's home page (ARM_CHILDREN)
+# can show this one's jobs. Credentials are never allowed, so such a read only gets the anonymous view.
+CORS(app, resources={r"/json": {"origins": "*", "methods": ["GET"], "supports_credentials": False,
+                                "send_wildcard": True}})
 
 login_manager = LoginManager()
 login_manager.init_app(app)
