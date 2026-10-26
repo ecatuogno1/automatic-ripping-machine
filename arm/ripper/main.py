@@ -24,7 +24,7 @@ if find_spec("arm") is None:
     sys.path.append(str(Path(__file__).parents[2]))
 
 import arm.config.config as cfg  # noqa E402
-from arm.models.config import Config  # noqa: E402
+from arm.models.config import Config, redact  # noqa: E402
 from arm.models.job import Job, JobState  # noqa: E402
 from arm.models.system_drives import SystemDrives  # noqa: E402
 from arm.ripper import (arm_ripper, identify, logger,  # noqa: E402
@@ -81,7 +81,7 @@ def log_arm_params(job):
                 "COMPLETED_PATH", "EXTRAS_SUB", "EMBY_REFRESH", "EMBY_SERVER",
                 "EMBY_PORT", "NOTIFY_RIP", "NOTIFY_TRANSCODE",
                 "MAX_CONCURRENT_TRANSCODES", "MAX_CONCURRENT_MAKEMKVINFO"):
-        logging.info(f"{key.lower()}: {str(cfg.arm_config.get(key, '<not given>'))}")
+        logging.info(f"{key.lower()}: {str(redact(key, cfg.arm_config.get(key, '<not given>')))}")
     logging.info("******************* End of config parameters *******************")
 
 
