@@ -26,7 +26,7 @@ if find_spec("arm") is None:
 import arm.config.config as cfg  # noqa E402
 from arm.models.config import Config  # noqa: E402
 from arm.models.job import Job, JobState  # noqa: E402
-from arm.models.system_drives import SystemDrives  # noqa: E402
+from arm.models.system_drives import CDS, SystemDrives  # noqa: E402
 from arm.ripper import (arm_ripper, identify, logger,  # noqa: E402
                         music_brainz, utils)
 from arm.ripper.ARMInfo import ARMInfo  # noqa E402
@@ -156,6 +156,33 @@ def main():
         logging.critical("Couldn't identify the disc type. Exiting without any action.")
 
 
+READY_WAIT_SECONDS = 10
+"""How long to wait for a drive whose tray is open, empty or reports no status."""
+LOADING_WAIT_SECONDS = 60
+"""How long to wait while the drive reports CDS_DRIVE_NOT_READY (disc still being recognised)."""
+
+
+def wait_until_ready(drive):
+    """
+    Wait for the drive to report a readable disc before the Job is created
+
+    With some drives and some disks, there is a race condition between creating the Job()
+    and the drive being ready, so give it a chance to get ready (observed with LG SP80NB80).
+    A disc that is still being recognised reports CDS_DRIVE_NOT_READY, on some drives for
+    half a minute, so keep waiting up to LOADING_WAIT_SECONDS while it does.
+    """
+    for num in range(1, LOADING_WAIT_SECONDS + 1):
+        drive.tray_status()
+        if drive.ready:
+            return
+        if num >= READY_WAIT_SECONDS and drive.tray != CDS.DRIVE_NOT_READY:
+            break
+        logging.info(f"[{num}] Drive [{drive.mount}] appears to be empty or is not ready "
+                     f"(ioctl tray status: {drive.tray}). Waiting 1s")
+        time.sleep(1)
+    raise utils.RipperException(f"Timed out waiting for drive to be ready (ioctl tray status: {drive.tray}).")
+
+
 def setup():
     global job
     global args
@@ -178,17 +205,7 @@ def setup():
     utils.arm_setup(arm_log)
     drive = SystemDrives.query.filter_by(mount=devpath).one()  # unique mounts
 
-    # With some drives and some disks, there is a race condition between creating the Job()
-    # below and the drive being ready, so give it a chance to get ready (observed with LG SP80NB80)
-    for num in range(1, 11):
-        drive.tray_status()
-        if drive.ready:
-            break
-        msg = f"[{num} of 10] Drive [{drive.mount}] appears to be empty or is not ready. Waiting 1s"
-        logging.info(msg)
-        time.sleep(1)
-    else:  # no break
-        raise utils.RipperException(f"Timed out waiting for drive to be ready (ioctl tray status: {drive.tray}).")
+    wait_until_ready(drive)
 
     # ARM Job starts
     # Create new job
