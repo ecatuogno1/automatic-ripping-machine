@@ -41,14 +41,31 @@ def call_omdb_api(title=None, year=None, imdb_id=None, plot="short"):
             str_url = f"https://www.omdbapi.com/?s={title}&plot={plot}&r=json&apikey={omdb_api_key}"
     else:
         app.logger.debug("no params")
-    # connect to omdb and add background key
+    title_info = omdb_request(str_url)
+    if title_info is not None and title_info.get('Error') == "Too many results." and title and not imdb_id:
+        # A very short title such as "9" matches too many titles for a search (?s=),
+        # so ask for the title itself (?t=) and return it as a one-entry search result
+        app.logger.debug("omdb - too many results, trying the exact title")
+        exact = omdb_request(str_url.replace("?s=", "?t=", 1))
+        title_info = exact
+        if exact is not None and 'Error' not in exact and exact.get('Response') != "False":
+            title_info = {'Search': [exact], 'Response': "True", 'background_url': None}
+    if title_info is not None and ('Error' in title_info or title_info['Response'] == "False"):
+        title_info = None
+    return title_info
+
+
+def omdb_request(str_url):
+    """
+    Request ``str_url`` from OMDb
+    :return: the decoded answer (with a ``background_url`` key added), or None if the request failed
+    """
+    title_info = None
     try:
         title_info_json = urllib.request.urlopen(str_url, timeout=REQUEST_TIMEOUT).read()
         title_info = json.loads(title_info_json.decode())
         title_info['background_url'] = None
         app.logger.debug(f"omdb - {title_info}")
-        if 'Error' in title_info or title_info['Response'] == "False":
-            title_info = None
     except urllib.error.HTTPError as error:
         app.logger.error(f"omdb call failed with error - {error}")
     else:
