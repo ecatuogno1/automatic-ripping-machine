@@ -95,6 +95,12 @@ MAX_CONCURRENT_MAKEMKVINFO: 0
 # Set to 0 to disable (wait as long as MakeMKV runs)
 STALL_ABORT_SECONDS: 0
 
+# Run a MakeMKV rip pass again in the same drive when it failed because the disc could not be read
+# (read errors, "Failed to open disc") or made no progress (STALL_ABORT_SECONDS), up to this many times (max 5).
+# Files the failed attempt wrote are removed first. An expired MakeMKV key, a removed disc or a write error
+# is never retried. Set to 0 to disable (a failed pass fails the job, as before)
+MAKEMKV_READ_RETRIES: 0
+
 # Additional parameters for dd. e.g. "conv=noerror,sync" for ignoring read errors
 # "status=progress" to log progress
 DATA_RIP_PARAMETERS: ""

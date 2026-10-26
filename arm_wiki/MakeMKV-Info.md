@@ -39,6 +39,27 @@ stopped".
 MakeMKV can be silent for several minutes while it scans a disc (there is no progress bar during a scan), so choose a
 generous value such as `1800` (30 minutes). `0` (the default) turns this off.
 
+### Retrying a failed rip: `MAKEMKV_READ_RETRIES`
+A rip can fail because of a smudge, a slow drive or a drive that briefly stops answering, and work on a second try.
+Set `MAKEMKV_READ_RETRIES` (in "Arm Settings" > "Ripper Settings", or in `arm.yaml`) to run a failed MakeMKV rip pass
+again in the same drive, up to that many times (at most 5; `1` is usually enough). Before each retry A.R.M. removes the
+files the failed attempt wrote to the raw folder and waits 10 seconds.
+
+Only failures that a retry can fix are retried. A.R.M. reads MakeMKV's messages to decide:
+
+| MakeMKV reported | Retried? |
+|---|---|
+| read errors on the disc, or "Failed to open disc" | yes |
+| no progress for `STALL_ABORT_SECONDS` (see above) | yes |
+| an expired key or evaluation period | no |
+| the disc was removed or the tray opened | no |
+| a write error (disk full, permissions) | no |
+| anything else | no |
+
+When the job fails, its log says why, e.g. "MakeMKV rip failed: the disc could not be read (after 2 attempts)".
+Each rip pass is retried on its own: with a maximum track length set, only the track that failed is ripped again.
+`0` (the default) turns retries off.
+
 ### Profiles
 MakeMKV can also use the concept of profiles to decide which audio tracks and which subtitle tracks to include in the 
 *.mkv files. The defaults are usually sufficient. However, A.R.M. allows you to change these defaults if needed.  This is 
