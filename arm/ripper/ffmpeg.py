@@ -56,6 +56,20 @@ def correct_ffmpeg_settings(job):
     return ff_pre_args, ff_post_args
 
 
+def ffmpeg_input(src_path):
+    """
+    Input for ffmpeg/ffprobe -i: a MakeMKV Blu-ray backup (a folder with BDMV in it, from
+    RIPMETHOD backup) is read through FFmpeg's bluray: protocol, which plays the disc's main
+    (longest) playlist. Anything else is passed through unchanged.
+    """
+    src_path = str(src_path)
+    if os.path.basename(os.path.normpath(src_path)) == "BDMV":
+        src_path = os.path.dirname(os.path.normpath(src_path))
+    if os.path.isdir(os.path.join(src_path, "BDMV")):
+        return f"bluray:{src_path}"
+    return src_path
+
+
 def probe_source(src_path):
     """
     Run ffprobe on src_path and return JSON string or None on failure.
@@ -64,7 +78,7 @@ def probe_source(src_path):
     focus on parsing and error handling.
     """
 
-    cmd = f"ffprobe -v error -print_format json -show_format -show_streams {shlex.quote(src_path)}"
+    cmd = f"ffprobe -v error -print_format json -show_format -show_streams {shlex.quote(ffmpeg_input(src_path))}"
     logging.debug(f"FFProbe command: {cmd}")
     try:
         out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
@@ -388,17 +402,21 @@ def get_track_info(src_path, job):
     logging.info("Using ffprobe to get information on tracks. This will take a few moments...")
 
     # Orchestrate probing and registering via helpers
+    source = ffmpeg_input(src_path)
+    if source.startswith("bluray:"):
+        logging.info(f"Reading the Blu-ray backup in {src_path} through FFmpeg's bluray: input. "
+                     "Only its main (longest) playlist is transcoded; use RIPMETHOD mkv to transcode every title.")
+    elif os.path.isdir(src_path):
+        raise RuntimeError(f"FFmpeg can't transcode the folder {src_path}: it is not a Blu-ray backup (no BDMV). "
+                           "Set RIPMETHOD to mkv when USE_FFMPEG is enabled, or use HandBrake.")
     probe_json = probe_source(src_path)
-    if not probe_json:
-        logging.info("ffprobe returned no data; registering fallback track")
-        utils.put_track(job, 0, 0, 0, 0.0, False, "FFmpeg")
-        return
-
-    tracks = parse_probe_output(probe_json)
+    tracks = parse_probe_output(probe_json) if probe_json else []
     if not tracks:
-        logging.info("No tracks parsed from ffprobe; registering fallback track")
-        utils.put_track(job, 0, 0, 0, 0.0, False, "FFmpeg")
-        return
+        # Nothing to transcode: stop here with the reason instead of failing later on missing track data
+        hint = (" Reading a Blu-ray backup needs an FFmpeg built with libbluray (--enable-libbluray);"
+                " otherwise set RIPMETHOD to mkv when USE_FFMPEG is enabled."
+                if source.startswith("bluray:") else "")
+        raise RuntimeError(f"ffprobe could not read any tracks from {source}.{hint}")
 
     # Adds the tracks and info about the tracks to the job
     evaluate_and_register_tracks(tracks, job)
@@ -482,7 +500,7 @@ def run_transcode_cmd(src_file, out_file, job, ff_pre_args="", ff_post_args=""):
     try:
         duration_sec_str = subprocess.check_output(
             f"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "
-            f"{shlex.quote(src_file)}",
+            f"{shlex.quote(ffmpeg_input(src_file))}",
             shell=True, stderr=subprocess.STDOUT).decode('utf-8').strip()
         total_duration = int(float(duration_sec_str) * 1_000_000)
     except (subprocess.CalledProcessError, ValueError) as e:
@@ -490,7 +508,7 @@ def run_transcode_cmd(src_file, out_file, job, ff_pre_args="", ff_post_args=""):
         # We can continue without progress reporting if this fails
 
         # Build the ffmpeg command without progress reporting
-    cmd = (f"{cfg.arm_config['FFMPEG_CLI']} {ff_pre_args} -i {shlex.quote(src_file)} "
+    cmd = (f"{cfg.arm_config['FFMPEG_CLI']} {ff_pre_args} -i {shlex.quote(ffmpeg_input(src_file))} "
            f"{'-progress pipe:1 ' if logging.getLogger().isEnabledFor(logging.DEBUG) else ''}"
            f"{ff_post_args} {shlex.quote(out_file)}")
 
