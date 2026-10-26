@@ -38,6 +38,12 @@ PLACEHOLDERS = {"", "notidentified", "dvd", "dvdvideo", "bluray", "video", "unti
 DISC_SUFFIX = re.compile(r"\s+(?:DVD|BLU\s?RAY|DIS[CK]\s*\d+|D\d)$", re.IGNORECASE)
 SEASON = re.compile(r"\b(?:SEASON\s*\d+|S\d{1,2})\b", re.IGNORECASE)
 IMDB_ID = re.compile(r"tt\d{5,10}")
+# First-pass outcomes a looser reading of the label may still settle (identify_loose)
+NO_NAMED = "no film is named like the label"
+NONE_FITS = "no film named like the label fits the runtime"
+SEVERAL_FIT = "several films named like the label fit the runtime"
+NO_RUNTIME = "a film named like the label has no known runtime"
+SECOND_PASS_REASONS = (NO_NAMED, NONE_FITS, SEVERAL_FIT, NO_RUNTIME)
 
 
 def normalize(value):
@@ -227,9 +233,9 @@ def closest(movies, seconds):
 def by_label(title, films, seconds):
     """(film, method) when the runtime singles out one film named like the label, else (None, reason)"""
     if not films:
-        return None, "no film is named like the label"
+        return None, NO_NAMED
     if any(m["runtime"] is None and not placeholder(m) for m in films):
-        return None, "a film named like the label has no known runtime"
+        return None, NO_RUNTIME
     plausible = [m for m in films if fits(m, seconds)]
     if len(plausible) == 1:
         chosen = plausible[0]
@@ -238,8 +244,8 @@ def by_label(title, films, seconds):
     else:
         chosen, method = closest(plausible, seconds), "label-and-closest-runtime"
     if chosen is None:
-        return None, ("several films named like the label fit the runtime" if plausible
-                      else "no film named like the label fits the runtime")
+        return None, (SEVERAL_FIT if plausible
+                      else NONE_FITS)
     if not identified(chosen):
         return None, "the matching film has no release year or IMDb id"
     return chosen, method
@@ -308,8 +314,14 @@ def confirm(catalog, label, seconds, crc_answer=None):
         return None, "the label names a TV season"
     films = named_films(catalog, title, year) if title else []
     chosen, method = by_label(title, films, seconds)
-    chosen, method = weigh_hint(title, chosen, method, hint_film(catalog, crc_answer, films), films, seconds)
-    return over_namesake(catalog, title, chosen, method, seconds)
+    hint = hint_film(catalog, crc_answer, films)
+    chosen, method = weigh_hint(title, chosen, method, hint, films, seconds)
+    chosen, method = over_namesake(catalog, title, chosen, method, seconds)
+    if chosen is None and method in SECOND_PASS_REASONS:
+        from arm.ripper import identify_loose  # imports this module
+        loose, how = identify_loose.second_pass(catalog, label, seconds, hint, films)
+        return (loose, how) if loose else (None, f"{method}; second pass: {how}")
+    return chosen, method
 
 
 def identify(job, label, tracks, crc_answer=None):

@@ -25,11 +25,27 @@ identity of a DVD by the length of its longest title, as reported by `lsdvd`:
   that runs within 2 minutes of a well-known film (500 or more votes on the provider). Labels with a season
   marker (`S1`, `SEASON 2`) are left to the usual search, as is every disc while `VIDEOTYPE` is `series`.
 
+If no film named like the label is confirmed, a second, looser pass reads the label the way studios
+shorten it and searches again:
+
+- pressing and edition words are dropped (`BEOWULF_DC`, `SHOOTER_AC_43`, `BULLETPROOF_US`) and glued
+  sequel numbers are split (`SUBSPECIES2_V2` is searched as "Subspecies 2" and "Subspecies");
+- run-together and abbreviated labels are matched word by word (`PRIMFEAR` ~ *Primal Fear*,
+  `PINEAPPLE_EXP` ~ *Pineapple Express*, `INTHENAMEOFTHEKING`);
+- only the strongest kind of match found is weighed (exact or sequel number, then leading article, then
+  prefix or abbreviation), the disc must be feature length (45 minutes or more), the film must be within
+  2.5 minutes (1.5 minutes for a prefix or abbreviation), and every other related film must be at least
+  3 minutes further off;
+- the ARM online database answer can pick among the related films only when it is the closest to the disc.
+
+The second pass never overrides a TV series of the same name or a disagreement with the ARM online database.
+
 When a film is confirmed, ARM sets the title, year, IMDb id and poster and skips the title search. When nothing
 is confirmed, or the provider cannot be reached, identification continues exactly as without the setting.
 
 The check uses the API key of the selected `METADATA_PROVIDER` and makes a few extra requests per disc
-(one search, plus one details request for each film named like the label, at most 10). Blu-ray discs are
+(one search, plus one details request for each film named like the label, at most 10; the second pass
+makes up to about ten more searches for a label nothing matched). Blu-ray discs are
 identified as before: their title length is not known until MakeMKV scans the disc.
 
 The default is `false`.
