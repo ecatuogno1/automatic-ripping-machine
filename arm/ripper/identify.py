@@ -197,6 +197,7 @@ def identify_dvd(job):
     # Some older DVDs aren't actually labelled
     if not job.label or job.label == "":
         job.label = "not identified"
+    crc_identified = False
     try:
         crc64 = pydvdid.compute(str(job.mountpoint))
         dvd_title = f"{job.label}_{crc64}"
@@ -225,6 +226,7 @@ def identify_dvd(job):
                 'hasnicetitle': True
             }
             utils.database_updater(args, job)
+            crc_identified = True
     except Exception as error:
         logging.error(f"Pydvdid failed with the error: {error}")
         dvd_title = str(job.label)
@@ -240,14 +242,17 @@ def identify_dvd(job):
     dvd_title = re.sub(r"SKU\b", "", dvd_title)
     logging.debug(f"dvd_title SKU$: {dvd_title}")
 
-    # Do we really need metaselector if we have got from ARM online db?
-    try:
-        dvd_info_xml = metadata_selector(job, dvd_title, year)
-        logging.debug(f"DVD_INFO_XML: {dvd_info_xml}")
-        identify_loop(job, dvd_info_xml, dvd_title, year)
-    except Exception:
-        dvd_info_xml = None
-        logging.debug("Cant connect to online service!")
+    if crc_identified and cfg.arm_config.get("KEEP_CRC_IDENTITY", False):
+        # The title search below takes its first result and would replace the CRC64 match
+        logging.info("Keeping the ARM online database (crc64) identity; skipping the title search")
+    else:
+        try:
+            dvd_info_xml = metadata_selector(job, dvd_title, year)
+            logging.debug(f"DVD_INFO_XML: {dvd_info_xml}")
+            identify_loop(job, dvd_info_xml, dvd_title, year)
+        except Exception:
+            dvd_info_xml = None
+            logging.debug("Cant connect to online service!")
     # Failsafe so that we always have a title.
     if job.title is None or job.title == "None":
         job.title = str(job.label)

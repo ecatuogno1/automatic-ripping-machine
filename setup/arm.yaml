@@ -35,6 +35,11 @@ GET_VIDEO_TITLE: true
 # This is only needed if you would like to send movies to the database
 ARM_API_KEY: ""
 
+# When the ARM online database (crc64) identifies a DVD, keep that title, year and IMDb id
+# instead of replacing them with the first result of the OMDb/TMDB title search.
+# false (default) always runs the title search, as before
+KEEP_CRC_IDENTITY: false
+
 # Do you want to be forced to login to view/edit jobs
 # True will leave all of the pages open to be editable/viewable by anyone
 # False will require you to login to view/edit jobs or settings from the ui

@@ -24,3 +24,14 @@ They include
 
 
 You can view the full sample file here  [arm.yaml](https://github.com/automatic-ripping-machine/automatic-ripping-machine/blob/main/setup/arm.yaml)
+
+## Keeping the ARM online database identity (KEEP_CRC_IDENTITY)
+
+When `GET_VIDEO_TITLE` is enabled, ARM computes a DVD's crc64 and asks the ARM online database for it.
+If the database knows the disc, ARM fills in its title, year and IMDb id, and then still runs the OMDb/TMDB
+title search on the disc label. The first result of that search replaces the database answer, and for a generic
+or misleading label it can be a different film from the same year.
+
+Set `KEEP_CRC_IDENTITY: true` (Settings / Ripper Settings, or arm.yaml) to keep the online database answer and
+skip the title search for that disc. Discs the database does not know are searched by title as usual.
+The default is `false`, which always runs the title search.
