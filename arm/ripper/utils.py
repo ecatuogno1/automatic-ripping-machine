@@ -155,6 +155,28 @@ def sleep_check_process(process_str, max_processes, sleep=(20, 120, 10)):
     return True
 
 
+# Optional settings for a media type's own completed folder, used instead of COMPLETED_PATH/<sub-folder>
+COMPLETED_TYPE_PATHS = {
+    "movies": "COMPLETED_MOVIES_PATH",
+    "tv": "COMPLETED_TV_PATH",
+}
+COMPLETED_DATA_SETTING = "COMPLETED_DATA_PATH"
+
+
+def completed_type_path(job, type_sub_folder):
+    """
+    The folder a job's titles are completed into\n
+    COMPLETED_MOVIES_PATH, COMPLETED_TV_PATH or (for data discs) COMPLETED_DATA_PATH if set,
+    otherwise COMPLETED_PATH/<type_sub_folder> as before.
+    :param job: Current job
+    :param type_sub_folder: the job's sub-folder from convert_job_type()
+    :return: str path
+    """
+    setting = COMPLETED_DATA_SETTING if job.disctype == "data" else COMPLETED_TYPE_PATHS.get(type_sub_folder)
+    custom = str(cfg.arm_config.get(setting) or "").strip() if setting else ""
+    return custom or os.path.join(job.config.COMPLETED_PATH, type_sub_folder)
+
+
 def convert_job_type(video_type):
     """
     Converts the job_type to the correct sub-folder
@@ -491,7 +513,7 @@ def rip_data(job):
         job.label = "data-disc"
     # get filesystem in order
     raw_path = contained_path(job.config.RAW_PATH, str(job.label))
-    final_path = os.path.join(job.config.COMPLETED_PATH, convert_job_type(job.video_type))
+    final_path = completed_type_path(job, convert_job_type(job.video_type))
     final_file_name = str(job.label)
 
     if (make_dir(raw_path)) is False:
@@ -632,6 +654,10 @@ def arm_setup(arm_log: Logger) -> None:
         cfg.arm_config['LOGPATH'],
         os.path.join(cfg.arm_config['LOGPATH'], "progress"),
     )
+    # Add the per-type completed folders that are set
+    for setting in (*COMPLETED_TYPE_PATHS.values(), COMPLETED_DATA_SETTING):
+        if str(cfg.arm_config.get(setting) or "").strip():
+            arm_directories += (cfg.arm_config[setting],)
     # Check if DB file is writeable
     if not os.access(cfg.arm_config['DBFILE'], os.W_OK):
         arm_log.critical(f"Can't write to database file: {cfg.arm_config['DBFILE']}")
