@@ -654,6 +654,16 @@ def makemkv_backup(job, rawpath):
     collections.deque(run(cmd, OutputType.MSG), maxlen=0)
 
 
+# File name MakeMKV gives a ripped title: <name>_t<number>.mkv
+MKV_TITLE_FILE = re.compile(r"^(.*)_t(\d+)\.mkv$")
+
+
+def title_file_parts(filename):
+    """Split a MakeMKV title file name into (name, number), or None if it isn't one."""
+    match = MKV_TITLE_FILE.match(str(filename))
+    return (match.group(1), int(match.group(2))) if match else None
+
+
 def makemkv_mkv(job, rawpath):
     """
     Rip Blu-ray without enhanced protection or dvd disc
@@ -706,8 +716,45 @@ def makemkv_mkv(job, rawpath):
         ]
         logging.info("Process all tracks from disc.")
         collections.deque(run(cmd, OutputType.MSG), maxlen=0)
+        reconcile_track_filenames(job, rawpath)
     else:
         process_single_tracks(job, rawpath, 'auto')
+
+
+def reconcile_track_filenames(job, rawpath):
+    """
+    Point the ripped tracks at the files ``mkv ... all`` actually wrote
+
+    The info scan names each title by its title id (``A1_t02.mkv``), but an ``all`` rip numbers
+    the files by the titles it saves (``A1_t00.mkv``). When titles shorter than MINLENGTH come
+    first, the stored names don't exist and the files are not transcoded or moved.
+    MakeMKV saves the titles in title order, so the n-th ripped track is the n-th file.
+
+    Parameters:
+        job: arm.models.job.Job
+        rawpath: folder MakeMKV ripped to
+    """
+    tracks = sorted((track for track in job.tracks if track.ripped), key=lambda track: int(track.track_number))
+    try:
+        files = [name for name in os.listdir(rawpath) if title_file_parts(name)]
+    except OSError as error:
+        logging.warning(f"Could not list {rawpath} to check the ripped file names: {error}")
+        return
+    if all(track.filename in files for track in tracks):
+        return
+    files.sort(key=lambda name: title_file_parts(name)[1])
+    pairs = list(zip(tracks, files))
+    # The part before _tNN comes from the title itself and doesn't change between scan and rip
+    if len(tracks) != len(files) or any((title_file_parts(track.filename) or ("",))[0] != title_file_parts(name)[0]
+                                        for track, name in pairs):
+        logging.warning(f"Ripped tracks {[track.filename for track in tracks]} don't match the files "
+                        f"MakeMKV wrote to {rawpath} {files}; leaving the track file names unchanged")
+        return
+    for track, name in pairs:
+        if track.filename != name:
+            logging.info(f"Track #{track.track_number}: MakeMKV saved '{track.filename}' as '{name}'")
+            track.filename = name
+    db.session.commit()
 
 
 def makemkv(job):
