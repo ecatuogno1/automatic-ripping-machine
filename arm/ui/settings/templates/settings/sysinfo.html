@@ -32,6 +32,7 @@
                         </li>
                         <li class="list-group-item">
                             <h6 class="progress-label" style="float: left;margin-right: 1em;">Usage: </h6>
+                            {% if serverutil.cpu_util is not none %}
                             <div class="progress">
                                 <div class="progress-bar{{ ' bg-danger' if serverutil.cpu_util > 80 }}"
                                      role="progressbar"
@@ -40,6 +41,9 @@
                                     {{ serverutil.cpu_util }}%
                                 </div>
                             </div>
+                            {% else %}
+                                measuring, reload in a moment
+                            {% endif %}
                         </li>
                     </ul>
                 </div>
@@ -77,7 +81,7 @@
                     </div>
                     <ul class="list-group list-group-flush">
                         <li class="list-group-item">
-                            {% if server.storage_transcode_free != 0 %}
+                            {% if serverutil.storage_transcode_free is not none %}
                                 <h6 class="progress-label" style="float: left;margin-right: 1em;">Transcode: </h6>
                                 <div class="progress">
                                     <div class="progress-bar{{ ' bg-danger' if serverutil.storage_transcode_percent > 80 }}"
@@ -95,7 +99,7 @@
                             <br>Path: {{ arm_path }}
                         </li>
                         <li class="list-group-item">
-                            {% if serverutil.storage_completed_free != 0 %}
+                            {% if serverutil.storage_completed_free is not none %}
                                 <h6 class="progress-label" style="float: left;margin-right: 1em;">Completed: </h6>
                                 <div class="progress">
                                     <div class="progress-bar{{ ' bg-danger' if serverutil.storage_completed_percent > 80 }}"
