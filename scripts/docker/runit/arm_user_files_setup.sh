@@ -50,6 +50,16 @@ fix_home_ownership() {
     fi
 }
 
+# Create the config folder owned by the arm user if it isn't there (no config volume mounted)
+create_config_folder() {
+    local config_dir="$1"
+    if [[ ! -d "$config_dir" ]]; then
+        echo "Creating dir: $config_dir"
+        mkdir -p "$config_dir"
+        chown arm:arm "$config_dir"
+    fi
+}
+
 ### Setup User
 if [[ $ARM_UID -ne $DEFAULT_UID ]]; then
   echo -e "Updating arm user id from $DEFAULT_UID to $ARM_UID..."
@@ -95,10 +105,12 @@ if [ -h /home/arm/Music ]; then
 fi
 
 ##### Setup ARM-specific config files if not found
+# Without a config volume the folder doesn't exist yet: create it for the arm user
+# before checking it, or the check fails on a missing folder (#1599)
+create_config_folder "/etc/arm/config"
 # Check ownership of the ARM config folder
 check_folder_ownership "/etc/arm/config"
 
-mkdir -p /etc/arm/config
 CONFS="arm.yaml apprise.yaml"
 for conf in $CONFS; do
   thisConf="/etc/arm/config/${conf}"
