@@ -593,13 +593,20 @@ def send_to_remote_db(job_id):
           f"&y={job.year}&imdb={job.imdb_id}" \
           f"&hnt={job.hasnicetitle}&l={job.label}&vt={job.video_type}"
     app.logger.debug(url.replace(api_key, "<api_key>"))
-    response = requests.get(url)
-    req = json.loads(response.text)
-    app.logger.debug("req= " + str(req))
     job_dict = job.get_d().items()
     return_dict['config'] = job.config.get_d()
     for key, value in iter(job_dict):
         return_dict[str(key)] = str(value)
+    try:
+        response = requests.get(url, timeout=10)
+    except requests.RequestException as error:
+        # The exception text can contain the request URL, which carries the API key
+        app.logger.error(f"Could not reach the ARM database: {type(error).__name__}")
+        return_dict['error'] = "Could not reach the ARM database"
+        return_dict['status'] = "fail"
+        return return_dict
+    req = json.loads(response.text)
+    app.logger.debug("req= " + str(req))
     if req['success']:
         return_dict['status'] = "success"
     else:
