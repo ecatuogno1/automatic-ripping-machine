@@ -19,6 +19,7 @@ from flask import render_template, request, Blueprint, flash, redirect, url_for
 from werkzeug.routing import ValidationError
 
 import arm.ui.utils as ui_utils
+from arm.ui import arr_library
 from arm.ui import app, db, constants, json_api
 from arm.models.job import Job, JobState
 from arm.models.notifications import Notifications
@@ -77,6 +78,7 @@ def jobdetail():
                            tracks=tracks,
                            s=search_results,
                            manual_edit=manual_edit,
+                           in_library=arr_library.in_library(job),
                            form=track_form)
 
 

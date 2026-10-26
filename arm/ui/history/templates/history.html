@@ -77,7 +77,10 @@
                                 <td>{{ job.job_length }}</td>
                                 <td class="{{ job.status }}"><img src="static/img/{{ job.status }}.png" height="30px"
                                                                   width="30px" alt="{{ job.status }}"
-                                                                  title="{{ job.status }}"></td>
+                                                                  title="{{ job.status }}">
+                                    {% if job.job_id in in_library %}
+                                    <span class="badge badge-success" title="{{ in_library[job.job_id] }} has a file for this title">In library</span>
+                                    {% endif %}</td>
                                 <td><a href="logs?logfile={{ job.logfile }}&mode=full">{{ job.logfile|truncate(50, True)
                                     if job.logfile is not none else 'Unknown logfile' }}</a></td>
                             </tr>
