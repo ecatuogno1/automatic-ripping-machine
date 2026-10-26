@@ -68,3 +68,26 @@ def test_mounted_folder_writable_by_arm_passes(tmp_path):
                       commands='check_folder_ownership "$ARM_HOME"\n')
     assert proc.returncode == 0, proc.stdout
     assert "[WARN]" in proc.stdout
+
+
+def test_missing_config_folder_is_created_for_arm_before_the_check(tmp_path):
+    # No volume mounted at /etc/arm/config (#1599)
+    proc, chown_call, _ = _run(tmp_path, "0:0", mounted=True, writable=False,
+                               commands='create_config_folder "$ARM_HOME/config"\n'
+                                        'check_folder_ownership "$ARM_HOME/config"\n')
+    assert proc.returncode == 0, proc.stdout
+    assert chown_call.startswith("arm:arm ")
+    assert (tmp_path / "home" / "config").is_dir()
+
+
+def test_existing_config_folder_is_left_alone(tmp_path):
+    (tmp_path / "config").mkdir()
+    proc, chown_call, _ = _run(tmp_path, "1035:100", mounted=True, writable=False,
+                               commands=f'create_config_folder "{tmp_path / "config"}"\n')
+    assert proc.returncode == 0, proc.stdout
+    assert chown_call == ""
+
+
+def test_config_folder_is_created_before_its_ownership_is_checked():
+    text = SCRIPT.read_text()
+    assert text.index('create_config_folder "/etc/arm/config"') < text.index('check_folder_ownership "/etc/arm/config"')
