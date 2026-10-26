@@ -219,7 +219,9 @@ class MakeMKVErrorMessage(MakeMKVMessage):
 
     def __post_init__(self):
         if len(self.sprintf) < 2:
-            raise ValueError(self.sprintf)
+            # MakeMKV sent no error parameter: keep the error passed in (the message text)
+            self.sprintf = []
+            return
         self.error = str(self.sprintf[1])
         self.sprintf = self.sprintf[2:]
 
@@ -513,16 +515,37 @@ def parse_content(content, num_header, num_message):
 
 
 def parse_line(line):
-    """Parse MakeMkv Output Line to DataClasses"""
+    """
+    Parse MakeMkv Output Line to DataClasses
+
+    Raises:
+        MakeMkvParserError: the line is not a well-formed record (run() logs and skips it)
+        MakeMkvRuntimeError: the record reports a failed rip
+    """
     if ":" not in line:
         raise MakeMkvParserError("No Message Type Detected")
     msg_type, content = line.split(":", maxsplit=1)
     if msg_type not in OutputType.__members__:
         raise MakeMkvParserError(f"Cannot parse '{msg_type}':'{content}'")
     msg_type = OutputType[msg_type]
+    try:
+        return msg_type, _parse_record(msg_type, content)
+    except MakeMkvParserError:
+        raise
+    except (TypeError, IndexError, ValueError) as error:
+        # a truncated or malformed record (e.g. 'MSG:5010,0') must not abort the rip
+        raise MakeMkvParserError(f"Malformed {msg_type.name} record '{content}': {error}") from error
+
+
+def _parse_record(msg_type, content):
+    """Parse the content of one MakeMKV record into its dataclass"""
     if msg_type == OutputType.MSG:
-        temp = parse_content(content, 3, -1)
-        data = MakeMKVMessage(*itertools.islice(temp, 4), list(temp))
+        fields = list(parse_content(content, 3, -1))
+        if len(fields) < 3:
+            raise MakeMkvParserError(f"Incomplete MSG header '{content}'")
+        code, flags, count, *text = fields
+        # a known code without its text (e.g. 'MSG:5080,0,0') is still that message
+        data = MakeMKVMessage(code, flags, count, text[0] if text else f"MakeMKV message {code}", text[1:])
         message = MakeMKVOutputChecker(data).check()
     elif msg_type == OutputType.PRGV:
         message = ProgressBarValues(*parse_content(content, 2, 0))
@@ -544,7 +567,7 @@ def parse_line(line):
         message = Titles(*parse_content(content, 0, 0))
     else:
         raise MakeMkvParserError(f"Cannot handle '{msg_type}':'{content}'")
-    return msg_type, message
+    return message
 
 
 def makemkv_info(job, select=None, index=9999, options=None):
@@ -1165,12 +1188,18 @@ class MakeMKVOutputChecker:
 
     def zero_saved_files(self):
         """
-        Check the MSG and see if we saved no files. Raise MakeMkvRuntimeError if saved files =0
+        Check the MSG and see if we saved no files. Raise MakeMkvRuntimeError if no file (or a negative count) was saved
         """
         params = self.data.sprintf[1:]
-        saved = int(params[0])  # 0
         logging.debug(self.data)
-        if saved == 0:
+        try:
+            saved = int(params[0])  # 0
+        except (IndexError, ValueError):
+            # without a readable count there is no evidence that anything was saved
+            logging.critical(self.data.message)
+            raise MakeMkvRuntimeError(1, ["RIP_COMPLETED"],
+                                      output="MakeMKV's rip summary has no readable count of saved titles")
+        if saved < 1:  # a negative count is as unreadable as none
             logging.critical(self.data.message)
             raise MakeMkvRuntimeError(1, ["RIP_COMPLETED"],
                                       output=f"{saved} titles were saved. See log for more details")
@@ -1183,8 +1212,12 @@ class MakeMKVOutputChecker:
         raise MakeMkvRuntimeError(1, ["RIP_TITLE_ERROR"],
                                   output=self.data.message)
 
+    def first_parameter(self):
+        """The message's first parameter (the error text), or the message when MakeMKV sent none"""
+        return self.data.sprintf[1] if len(self.data.sprintf) > 1 else self.data.message
+
     def read_error(self):
-        error_msg = self.data.sprintf[1]
+        error_msg = self.first_parameter()
         log_func, debug_msg = self.READ_ERROR_MAP.get(error_msg, (logging.warning, None))
 
         if debug_msg:
@@ -1197,7 +1230,7 @@ class MakeMKVOutputChecker:
         return MakeMKVErrorMessage(*dataclasses.astuple(self.data), self.data.message)
 
     def write_error(self):
-        error_msg = self.data.sprintf[1]
+        error_msg = self.first_parameter()
         if error_msg == "Posix error - No such file or directory":
             logging.critical(self.data.message)
         else:
