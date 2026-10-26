@@ -7,9 +7,13 @@ Covers
 - logout [GET]
 - update_password [GET, POST]
 """
+import math
 from sqlite3 import OperationalError
+import threading
+import time
+
 import bcrypt
-from flask import redirect, render_template, request, Blueprint, flash, app, session
+from flask import redirect, render_template, request, Blueprint, flash, app, session, make_response
 from flask_login import LoginManager, login_required, \
     current_user, login_user, logout_user  # noqa: F401
 
@@ -25,6 +29,56 @@ route_auth = Blueprint('route_auth', __name__,
 # Define the Flask login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+
+class LoginThrottle:
+    """
+    Per-client backoff after failed sign-ins: FREE failures pass, then each further attempt
+    waits 1, 2, 4 ... seconds (at most CAP) after the last failure.
+    Kept in memory (one UI process). A client's count is forgotten FORGET seconds after its
+    last failure, and on a successful sign-in.
+    """
+    FREE = 5
+    CAP = 900
+    FORGET = 3600
+    LIMIT = 4096  # clients remembered at once
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.lock = threading.Lock()
+        self.failures = {}
+
+    def wait(self, client):
+        """Seconds this client must still wait before its next attempt is checked (0: go ahead)"""
+        with self.lock:
+            entry = self.failures.get(client)
+            if entry is None:
+                return 0
+            count, last = entry
+            now = self.clock()
+            if now - last > self.FORGET:
+                del self.failures[client]
+                return 0
+            if count < self.FREE:
+                return 0
+            return max(0, last + min(self.CAP, 2 ** (count - self.FREE)) - now)
+
+    def failed(self, client):
+        """Count a failed sign-in"""
+        with self.lock:
+            count = self.failures.get(client, (0, 0))[0]
+            if client not in self.failures and len(self.failures) >= self.LIMIT:
+                # Forget the client whose last failure is oldest
+                del self.failures[min(self.failures, key=lambda key: self.failures[key][1])]
+            self.failures[client] = (count + 1, self.clock())
+
+    def succeeded(self, client):
+        """Forget a client's failures after it signs in"""
+        with self.lock:
+            self.failures.pop(client, None)
+
+
+login_throttle = LoginThrottle()
 
 
 @route_auth.route('/login', methods=['GET', 'POST'])
@@ -62,6 +116,15 @@ def login():
         return_redirect = redirect(constants.HOME_PAGE)
 
     form = SetupForm()
+    client = request.remote_addr or "unknown"
+    wait = login_throttle.wait(client) if request.method == 'POST' else 0
+    if wait:
+        # Checked before the password, so a guessing client learns nothing until its wait is over
+        retry_after = str(math.ceil(wait))
+        flash(f"Too many failed sign-ins. Try again in {retry_after} seconds.", "danger")
+        response = make_response(render_template('login.html', form=form), 429)
+        response.headers["Retry-After"] = retry_after
+        return response
     if form.validate_on_submit():
         login_username = form.username.data.strip()
         login_password = form.password.data.strip().encode('utf-8')
@@ -74,10 +137,13 @@ def login():
         login_hashed = bcrypt.hashpw(login_password, admin.hash)
 
         if login_hashed == password and login_username == admin.email:
+            login_throttle.succeeded(client)
             login_user(admin)
             app.logger.debug("user was logged in - redirecting")
             return_redirect = redirect(constants.HOME_PAGE)
         else:
+            login_throttle.failed(client)
+            app.logger.warning(f"Failed sign-in from {client}")
             flash("Something isn't right", "danger")
 
     # If nothing has gone wrong, give them the login page
