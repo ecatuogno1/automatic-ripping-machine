@@ -89,6 +89,12 @@ MAX_CONCURRENT_TRANSCODES: 0
 # Set to 0 to disable
 MAX_CONCURRENT_MAKEMKVINFO: 0
 
+# Stop a MakeMKV run (disc scan or rip) that prints nothing and whose progress does not change for
+# this many seconds, and fail the job, instead of waiting forever on a damaged disc or hung drive.
+# Scanning a disc can be silent for several minutes, so use a generous value (e.g. 1800).
+# Set to 0 to disable (wait as long as MakeMKV runs)
+STALL_ABORT_SECONDS: 0
+
 # Additional parameters for dd. e.g. "conv=noerror,sync" for ignoring read errors
 # "status=progress" to log progress
 DATA_RIP_PARAMETERS: ""

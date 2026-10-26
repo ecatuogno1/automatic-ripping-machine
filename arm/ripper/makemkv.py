@@ -8,6 +8,7 @@ Reference:
 """
 
 import collections
+import contextlib
 import dataclasses
 import enum
 import itertools
@@ -17,7 +18,8 @@ import re
 import shlex
 import shutil
 import subprocess
-from time import sleep, time
+import threading
+from time import monotonic, sleep, time
 
 import arm.config.config as cfg
 from arm.models import SystemDrives, Track
@@ -480,6 +482,20 @@ class MakeMkvRuntimeError(RuntimeError):
         self.message = f"Call to MakeMKV failed with code: {returncode}"
         logging.error(self.message)
         super().__init__(self.message)
+
+
+class MakeMkvStalledError(MakeMkvRuntimeError):
+    """
+    Exception raised when makemkvcon was stopped by the STALL_ABORT_SECONDS watchdog
+    because it printed nothing and its progress did not change for that long.
+    """
+
+    def __init__(self, seconds, cmd):
+        logging.debug(f"MakeMKV command: '{' '.join(cmd)}'")
+        self.message = (f"MakeMKV made no progress for {seconds} seconds and was stopped "
+                        f"(STALL_ABORT_SECONDS). The disc may be damaged or the drive unresponsive.")
+        logging.error(self.message)
+        RuntimeError.__init__(self, self.message)
 
 
 def parse_content(content, num_header, num_message):
@@ -1216,6 +1232,95 @@ class MakeMKVOutputChecker:
         return self.data
 
 
+def stall_abort_seconds():
+    """STALL_ABORT_SECONDS from arm.yaml; 0, empty or an invalid value turns the watchdog off"""
+    value = cfg.arm_config.get("STALL_ABORT_SECONDS")
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        logging.warning(f"Ignoring invalid STALL_ABORT_SECONDS value: {value!r}")
+        return 0
+
+
+class StallWatchdog:
+    """
+    Stop a makemkvcon process that printed nothing and whose progress file did not change
+    for ``seconds``.
+
+    MakeMKV writes its messages to stdout (run() calls ``activity()`` for every line) and,
+    when ``--progress=<file>`` is given, its progress bars to that file. A rewrite of the
+    same progress line does not count as progress.
+    """
+
+    def __init__(self, proc, seconds, progress_file=None, poll=1.0):
+        self.proc = proc
+        self.seconds = seconds
+        self.progress_file = progress_file
+        self.poll = min(poll, seconds)
+        self.stalled = False
+        self._last_activity = monotonic()
+        self._progress = (None, None)  # (size, last line) of the progress file
+        self._done = threading.Event()
+        self._thread = threading.Thread(target=self._watch, name=f"makemkv-watchdog-{proc.pid}", daemon=True)
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self._done.set()
+        self._thread.join(timeout=self.poll + 15)
+        return False
+
+    def activity(self):
+        """makemkvcon printed a line"""
+        self._last_activity = monotonic()
+
+    def _progress_changed(self):
+        try:
+            size = os.path.getsize(self.progress_file)
+            if size == self._progress[0]:
+                return False
+            with open(self.progress_file, "rb") as progress:
+                progress.seek(max(0, size - 4096))
+                tail = progress.read().decode("utf-8", errors="replace").strip()
+        except OSError:
+            return False
+        last_line = tail.splitlines()[-1] if tail else ""
+        changed = last_line != self._progress[1]
+        self._progress = (size, last_line)
+        return changed
+
+    def _watch(self):
+        while not self._done.wait(self.poll):
+            if self.progress_file and self._progress_changed():
+                self.activity()
+            if monotonic() - self._last_activity >= self.seconds:
+                self._stop_process()
+                return
+
+    def _stop_process(self):
+        self.stalled = True
+        logging.error(f"PID {self.proc.pid}: makemkvcon made no progress for {self.seconds}s, stopping it")
+        try:
+            self.proc.terminate()
+            self.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            logging.warning(f"PID {self.proc.pid}: makemkvcon did not exit after SIGTERM, killing it")
+            self.proc.kill()
+        except OSError as error:
+            logging.warning(f"PID {self.proc.pid}: could not stop makemkvcon: {error}")
+
+
+def _progress_file(options):
+    """The file passed with --progress=<file>, if any (not -stdout/-null)"""
+    for option in options:
+        option = str(option)
+        if option.startswith("--progress=") and option not in ("--progress=-stdout", "--progress=-null"):
+            return option.split("=", 1)[1]
+    return None
+
+
 def run(options, select):
     """
     Run makemkv with input cli options and yield selected messages
@@ -1227,6 +1332,7 @@ def run(options, select):
         dataclasses of selected type
     Raises:
         MakeMkvRuntimeError on makemkvcon exit code
+        MakeMkvStalledError when STALL_ABORT_SECONDS is set and makemkvcon made no progress for that long
     """
     if not isinstance(options, (tuple, list)):
         raise TypeError(options)
@@ -1243,23 +1349,32 @@ def run(options, select):
     cmd += list(options)
     buffer = []
     logging.debug(f"command: '{' '.join(cmd)}'")
+    abort_seconds = stall_abort_seconds()
+    watchdog = None
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True) as proc:
         logging.debug(f"PID {proc.pid}: command: '{' '.join(cmd)}'")
-        for line in proc.stdout:
-            line = line.rstrip(os.linesep)
-            logging.debug(line)  # Maybe write the raw output to a separate log
-            if proc.returncode:
-                buffer.append(line)
-                continue
-            try:
-                msg_type, data = parse_line(line)
-            except MakeMkvParserError as err:
-                logging.warning(err)
-                buffer.append(line)
-                continue
-            logging.debug(data)
-            if msg_type in select:
-                yield data
+        if abort_seconds:
+            watchdog = StallWatchdog(proc, abort_seconds, _progress_file(options))
+        with watchdog or contextlib.nullcontext():
+            for line in proc.stdout:
+                if watchdog:
+                    watchdog.activity()
+                line = line.rstrip(os.linesep)
+                logging.debug(line)  # Maybe write the raw output to a separate log
+                if proc.returncode:
+                    buffer.append(line)
+                    continue
+                try:
+                    msg_type, data = parse_line(line)
+                except MakeMkvParserError as err:
+                    logging.warning(err)
+                    buffer.append(line)
+                    continue
+                logging.debug(data)
+                if msg_type in select:
+                    yield data
+    if watchdog and watchdog.stalled:
+        raise MakeMkvStalledError(abort_seconds, cmd)
     if proc.returncode:
         raise MakeMkvRuntimeError(proc.returncode, cmd, output=os.linesep.join(buffer))
     if buffer and proc.returncode:
