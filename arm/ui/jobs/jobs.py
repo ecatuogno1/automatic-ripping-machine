@@ -13,6 +13,7 @@ Covers
 - json [JSON GET]
 """
 
+import re
 import json
 from flask_login import LoginManager, login_required, current_user  # noqa: F401
 from flask import render_template, request, Blueprint, flash, redirect, url_for
@@ -221,7 +222,11 @@ def updatetitle():
     job.year = job.year_manual = request.args.get('year')
     job.video_type = job.video_type_manual = request.args.get('type')
     job.imdb_id = job.imdb_id_manual = request.args.get('imdbID')
-    job.poster_url = job.poster_url_manual = request.args.get('poster')
+    poster = request.args.get('poster') or None
+    # Only a web image may become the poster: a javascript: or data: URL would run when clicked.
+    if poster and not re.match(r"^https?://", poster, re.I):
+        poster = None
+    job.poster_url = job.poster_url_manual = poster
 
     job.hasnicetitle = True
     notification = Notifications(f"Job: {job.job_id} was updated",

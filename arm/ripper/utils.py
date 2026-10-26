@@ -8,6 +8,7 @@ import shutil
 import time
 import random
 import re
+import shlex
 from logging import Logger
 from pathlib import Path, PurePath
 from math import ceil
@@ -502,11 +503,14 @@ def rip_data(job):
     make_dir(final_path)
     logging.info(f"Ripping data disc to: {incomplete_filename}")
     # Added from pull 366
-    cmd = f'dd if="{job.devpath}" of="{incomplete_filename}" {cfg.arm_config["DATA_RIP_PARAMETERS"]} 2>> ' \
-          f'{os.path.join(job.config.LOGPATH, job.logfile)}'
-    logging.debug(f"Sending command: {cmd}")
+    # The label comes from the disc itself, so it must never reach a shell: dd gets an argument list
+    # and its messages go to the job log through a file ARM opens.
+    cmd = ["dd", f"if={job.devpath}", f"of={incomplete_filename}",
+           *shlex.split(str(cfg.arm_config.get("DATA_RIP_PARAMETERS") or ""))]
+    logging.debug(f"Sending command: {shlex.join(cmd)}")
     try:
-        subprocess.check_output(cmd, shell=True).decode("utf-8")
+        with open(os.path.join(job.config.LOGPATH, job.logfile), "ab") as dd_log:
+            subprocess.check_output(cmd, stderr=dd_log)
         full_final_file = os.path.join(final_path, f"{str(job.label)}.iso")
         logging.info(f"Moving data-disc from '{incomplete_filename}' to '{full_final_file}'")
         move_files_main(incomplete_filename, full_final_file, final_path)
