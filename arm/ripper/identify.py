@@ -16,7 +16,7 @@ import xml.parsers.expat
 import arm.config.config as cfg
 from arm.models import Job
 
-from arm.ripper import utils
+from arm.ripper import identify_runtime, utils
 from arm.ripper.ProcessHandler import arm_subprocess
 from arm.ui import db
 
@@ -97,7 +97,8 @@ def identify(job):
                 res = identify_dvd(job)
             if job.disctype == "bluray":
                 res = identify_bluray(job)
-            if res:
+            # A runtime-confirmed identity (IDENTIFY_BY_RUNTIME) must not be replaced by a title search
+            if res and not getattr(job, "identity_verified", False):
                 get_video_details(job)
             else:
                 job.hasnicetitle = False
@@ -214,6 +215,7 @@ def identify_dvd(job):
     # Some older DVDs aren't actually labelled
     if not job.label or job.label == "":
         job.label = "not identified"
+    crc_answer = None
     try:
         crc64 = pydvdid.compute(str(job.mountpoint))
         dvd_title = f"{job.label}_{crc64}"
@@ -228,6 +230,7 @@ def identify_dvd(job):
         if arm_api_json['success']:
             logging.info("Found crc64 id from online API")
             logging.info(f"title is {arm_api_json['results']['0']['title']}")
+            crc_answer = arm_api_json['results']['0']
             args = {
                 'title': arm_api_json['results']['0']['title'],
                 'title_auto': arm_api_json['results']['0']['title'],
@@ -257,35 +260,53 @@ def identify_dvd(job):
     dvd_title = re.sub(r"SKU\b", "", dvd_title)
     logging.debug(f"dvd_title SKU$: {dvd_title}")
 
-    # Do we really need metaselector if we have got from ARM online db?
-    try:
-        dvd_info_xml = metadata_selector(job, dvd_title, year)
-        logging.debug(f"DVD_INFO_XML: {dvd_info_xml}")
-        identify_loop(job, dvd_info_xml, dvd_title, year)
-    except Exception:
-        dvd_info_xml = None
-        logging.debug("Cant connect to online service!")
+    # IDENTIFY_BY_RUNTIME needs the disc's titles before searching, so lsdvd runs first
+    by_runtime = cfg.arm_config.get("IDENTIFY_BY_RUNTIME", False)
+    tracks = lsdvd_tracks(job.devpath) if by_runtime else None
+    if by_runtime and identify_runtime.identify(job, dvd_title, tracks, crc_answer):
+        logging.info("Identity confirmed by the disc runtime; skipping the title search")
+    else:
+        # Do we really need metaselector if we have got from ARM online db?
+        try:
+            dvd_info_xml = metadata_selector(job, dvd_title, year)
+            logging.debug(f"DVD_INFO_XML: {dvd_info_xml}")
+            identify_loop(job, dvd_info_xml, dvd_title, year)
+        except Exception:
+            dvd_info_xml = None
+            logging.debug("Cant connect to online service!")
     # Failsafe so that we always have a title.
     if job.title is None or job.title == "None":
         job.title = str(job.label)
         job.year = None
 
     # Track 99 detection
+    if not by_runtime:
+        tracks = lsdvd_tracks(job.devpath)
+    if tracks is not None:
+        logging.debug(f"Detected {len(tracks)} tracks")
+        if len(tracks) == 99:
+            job.has_track_99 = True
+            if cfg.arm_config["PREVENT_99"]:
+                raise utils.RipperException("Track 99 found and PREVENT_99 is enabled")
+
+    return True
+
+
+def lsdvd_tracks(devpath):
+    """
+    The titles ``lsdvd`` reports for the disc in ``devpath``
+
+    :return: list of title dicts (with ``length`` in seconds), or None if lsdvd failed
+    """
     # -Oy means output a python dict
-    output = arm_subprocess(["lsdvd", "-Oy", job.devpath])
+    output = arm_subprocess(["lsdvd", "-Oy", devpath])
     if output:
         try:
             # literal_eval only accepts literals so we have to adjust the output slightly
-            tracks = literal_eval(re.sub(r"^.*\{", "{", output)).get("track", [])
-            logging.debug(f"Detected {len(tracks)} tracks")
-            if len(tracks) == 99:
-                job.has_track_99 = True
-                if cfg.arm_config["PREVENT_99"]:
-                    raise utils.RipperException("Track 99 found and PREVENT_99 is enabled")
+            return literal_eval(re.sub(r"^.*\{", "{", output)).get("track", [])
         except (SyntaxError, AttributeError) as e:
             logging.error("Failed to parse lsdvd output", exc_info=e)
-
-    return True
+    return None
 
 
 def get_video_details(job):

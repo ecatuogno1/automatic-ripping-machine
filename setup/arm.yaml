@@ -100,6 +100,12 @@ DATA_RIP_PARAMETERS: ""
 # You will still need to provide an api key for the provider you have selected
 METADATA_PROVIDER: "omdb"
 
+# Confirm a DVD's title by its runtime before the usual title search (uses METADATA_PROVIDER and its api key).
+# ARM looks up the films named like the disc label and keeps one only when the disc's longest title runs as
+# long as the film and no other candidate fits as well; the ARM online database (crc64) answer is checked the same way.
+# If nothing is confirmed, the usual title search runs. false (default) keeps the usual title search only
+IDENTIFY_BY_RUNTIME: false
+
 # Set to one of "none", "musicbrainz", "freecddb"
 # if "musicbrainz" is used the disc information are asked from musicbrainz.org
 # if "none" is used no label is identified

@@ -30,6 +30,7 @@
   "MAX_CONCURRENT_MAKEMKVINFO": "# Number of MakeMKV info calls that are allowed to run.\n#This can be set to 1 if makemkvcon info calls lead to crashes on backup or mkv calls.\n# Set to 0 to disable",
   "DATA_RIP_PARAMETERS": "# Additional parameters for dd. e.g. \"conv=noerror,sync\" for ignoring read errors",
   "METADATA_PROVIDER": "# This selects the metadata provider, Each provider has their own ups and downs\n# But a general rule would be \n# OMDB for movies and shows \n# TMDB for movies only\n# You will still need to provide an api key for the provider you have selected",
+  "IDENTIFY_BY_RUNTIME": "# Confirm a DVD's title by its runtime before the usual title search (uses METADATA_PROVIDER and its api key).\n# ARM looks up the films named like the disc label and keeps one only when the disc's longest title runs as\n# long as the film and no other candidate fits as well; the ARM online database (crc64) answer is checked the same way.\n# If nothing is confirmed, the usual title search runs. false (default) keeps the usual title search only",
   "GET_AUDIO_TITLE": "# Set to one of \"none\", \"musicbrainz\", \"freecddb\"\n# if \"musicbrainz\" is used the disc information are asked from musicbrainz.org\n# if \"none\" is used no label is identified",
   "RIP_POSTER": "# Rip DVD Posters from JACKET_P folder\n# Requires FFmpeg",
   "AUTO_EJECT": "# Auto-ejects disks\n# Auto-ejects disks when complete etc\n# Set to false to disable auto-ejection",
