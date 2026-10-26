@@ -17,7 +17,8 @@ import re
 import shlex
 import shutil
 import subprocess
-from time import sleep, time
+import tempfile
+from time import monotonic, sleep, time
 
 import arm.config.config as cfg
 from arm.models import SystemDrives, Track
@@ -39,6 +40,8 @@ MAX_DEVICES = 16
 """MakeMKV Optical Devices Limit"""
 SOURCE = "MakeMKV"
 """Used as input argument for put_track"""
+DVD9_BYTES = 8_547_991_552
+"""Capacity of a dual-layer DVD, assumed when the disc size is unknown"""
 
 ERROR_MESSAGE_OPERATION_RESULT = "Internal error - Operation result is incorrect (132)"
 ERROR_MESSAGE_TRAY_OPEN = "Scsi error - NOT READY:MEDIUM NOT PRESENT - TRAY OPEN"
@@ -554,7 +557,7 @@ def makemkv_info(job, select=None, index=9999, options=None):
     Parameters:
         job: arm.models.job.Job
         select (OutputType): Message Type (default: all)
-        index: Makemkv disc index (default: all)
+        index: Makemkv disc index (default: all), or a source string such as "file:/path/VIDEO_TS"
         options: Additional options to be passed to makemkvcon (default: [])
     Yields:
         dataclasses of selected type:
@@ -594,7 +597,8 @@ def makemkv_info(job, select=None, index=9999, options=None):
     if not isinstance(options, list):
         raise TypeError(options)
     # 1MB cache size to get info on the specified disc(s)
-    info_options = ["info", "--cache=1"] + options + [f"disc:{index:d}", f"--minlength={job.config.MINLENGTH}"]
+    source = index if isinstance(index, str) else f"disc:{index:d}"
+    info_options = ["info", "--cache=1"] + options + [source, f"--minlength={job.config.MINLENGTH}"]
     wait_time = job.config.MANUAL_WAIT_TIME
     max_processes = cfg.arm_config["MAX_CONCURRENT_MAKEMKVINFO"]
     job.status = JobState.VIDEO_WAITING.value
@@ -654,25 +658,27 @@ def makemkv_backup(job, rawpath):
     collections.deque(run(cmd, OutputType.MSG), maxlen=0)
 
 
-def makemkv_mkv(job, rawpath):
+def makemkv_mkv(job, rawpath, source=None):
     """
     Rip Blu-ray without enhanced protection or dvd disc
 
     Parameters:
         job: arm.models.job.Job
         rawpath:
+        source: MakeMKV source to read, e.g. "file:/path/VIDEO_TS" (default: the job's disc)
     """
     # Get drive mode for the current drive
     mode = utils.get_drive_mode(job.devpath)
     logging.info(f"Job running in {mode} mode")
     # Get track info form mkv rip
-    get_track_info(job.drive.mdisc, job)
+    get_track_info(job.drive.mdisc if source is None else source, job)
+    source = source or f"dev:{job.devpath}"
     # route to ripping functions.
     if job.config.MAINFEATURE:
         logging.info("Trying to find mainfeature (sorting by chapters desc, filesize desc, track_number asc)")
         track = Track.query.filter_by(job_id=job.job_id).order_by(
             Track.chapters.desc(), Track.filesize.desc(), Track.track_number.asc()).first()
-        rip_mainfeature(job, track, rawpath)
+        rip_mainfeature(job, track, rawpath, source)
     elif mode == 'manual':  # Run if mode is manual, user selects tracks
         # Set job status to waiting
         job.status = JobState.VIDEO_WAITING.value
@@ -682,7 +688,7 @@ def makemkv_mkv(job, rawpath):
             # Response from user provided, process requested tracks
             job.status = JobState.VIDEO_RIPPING.value
             db.session.commit()
-            process_single_tracks(job, rawpath, mode)
+            process_single_tracks(job, rawpath, mode, source)
         else:
             # Notify User: no action was taken
             title = "ARM is Sad - Job Abandoned"
@@ -699,7 +705,7 @@ def makemkv_mkv(job, rawpath):
         cmd += shlex.split(job.config.MKV_ARGS)
         cmd += [
             f"--progress={progress_log(job)}",
-            f"dev:{job.devpath}",
+            source,
             "all",
             rawpath,
             f"--minlength={job.config.MINLENGTH}",
@@ -707,7 +713,7 @@ def makemkv_mkv(job, rawpath):
         logging.info("Process all tracks from disc.")
         collections.deque(run(cmd, OutputType.MSG), maxlen=0)
     else:
-        process_single_tracks(job, rawpath, 'auto')
+        process_single_tracks(job, rawpath, 'auto', source)
 
 
 def makemkv(job):
@@ -754,7 +760,10 @@ def makemkv(job):
         makemkv_backup(job, rawpath)
     # Rip BluRay or DVD
     elif job.config.RIPMETHOD == "mkv" or job.disctype == "dvd":
-        makemkv_mkv(job, rawpath)
+        if read_once_applies(job):
+            makemkv_mkv_read_once(job, rawpath)
+        else:
+            makemkv_mkv(job, rawpath)
     else:
         logging.info("I'm confused what to do....  Passing on MakeMKV")
     job.eject()
@@ -762,13 +771,163 @@ def makemkv(job):
     return rawpath
 
 
-def rip_mainfeature(job, track, rawpath):
+def read_once_applies(job):
+    """True when READ_ONCE_DVD asks to copy this DVD to disk once before ripping its titles."""
+    if not cfg.arm_config.get("READ_ONCE_DVD", False) or job.disctype != "dvd":
+        return False
+    if getattr(job, "has_track_99", False):
+        # Protected discs often carry deliberately unreadable sectors, which stop dvdbackup
+        logging.info("Read-once DVD rip skipped: the disc has 99-title protection")
+        return False
+    return True
+
+
+def makemkv_mkv_read_once(job, rawpath):
+    """
+    Rip a DVD by reading the whole disc once (READ_ONCE_DVD)
+
+    dvdbackup copies the decrypted VIDEO_TS to RAW_PATH in one sequential pass, then
+    MakeMKV makes the titles from that copy instead of seeking through the disc again
+    for every title. When the copy can't be made, the disc is ripped as usual. When
+    the copy was made but MakeMKV fails on it, the copy is kept and the disc is ripped
+    as usual.
+
+    Parameters:
+        job: arm.models.job.Job
+        rawpath: folder for the MKV files
+    """
+    backup = dvd_backup(job)
+    if backup is None:
+        makemkv_mkv(job, rawpath)
+        return
+    backup_root, video_ts = backup
+    started = monotonic()
+    copy_failed = False
+    try:
+        makemkv_mkv(job, rawpath, source=f"file:{video_ts}")
+        logging.info(f"Read-once DVD rip: titles made from the disc copy in {monotonic() - started:.0f}s")
+    except MakeMkvRuntimeError as error:
+        copy_failed = True
+        logging.warning(f"Ripping the titles from the disc copy failed ({error}). Keeping the copy at "
+                        f"{backup_root} and ripping the titles from the disc instead")
+    finally:
+        if not copy_failed:
+            shutil.rmtree(backup_root, ignore_errors=True)
+    if copy_failed:
+        discard_partial_rip(job, rawpath)
+        makemkv_mkv(job, rawpath)
+
+
+def dvd_backup(job):
+    """
+    Copy the DVD's VIDEO_TS to a new folder in RAW_PATH with dvdbackup
+
+    Parameters:
+        job: arm.models.job.Job
+    Returns:
+        (backup folder, VIDEO_TS folder) or None when no verified copy could be made
+    """
+    tool = shutil.which("dvdbackup")
+    if not tool:
+        logging.warning("READ_ONCE_DVD is enabled but dvdbackup is not installed; ripping from the disc")
+        return None
+    raw_path = str(job.config.RAW_PATH)
+    # Room for the copy and for the titles made from it
+    needed = 2 * disc_size(job.devpath)
+    free = shutil.disk_usage(raw_path).free
+    if free < needed:
+        logging.warning(f"Read-once DVD rip skipped: {raw_path} has {free / 1024 ** 3:.1f} GiB free, "
+                        f"{needed / 1024 ** 3:.1f} GiB needed for the disc copy and its titles")
+        return None
+    backup_root = tempfile.mkdtemp(prefix=f"{job.job_id}_dvd_backup_", dir=raw_path)
+    # MakeMKV names the titles after the folder holding VIDEO_TS, as it does after the disc label
+    name = re.sub(r"[^\w.-]", "_", str(job.label or "")) or "DVD"
+    # -M mirrors the whole VIDEO_TS (menus included), -r a aborts on a read error instead of
+    # writing a gap into the copy
+    cmd = [tool, "-M", "-r", "a", "-i", str(job.devpath), "-o", backup_root, "-n", name]
+    logging.info(f"Read-once DVD rip: copying the disc to {backup_root}")
+    started = monotonic()
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except OSError as error:
+        proc = subprocess.CompletedProcess(cmd, 1, "", str(error))
+    video_ts = os.path.join(backup_root, name, "VIDEO_TS")
+    problem = f"dvdbackup exited with code {proc.returncode}" if proc.returncode else dvd_backup_problem(video_ts)
+    if problem:
+        output = " | ".join(line.strip() for line in (proc.stderr or proc.stdout or "").splitlines()[-5:])
+        logging.warning(f"Read-once DVD rip: no usable disc copy ({problem}) {output}".rstrip()
+                        + "; ripping from the disc")
+        shutil.rmtree(backup_root, ignore_errors=True)
+        return None
+    logging.info(f"Read-once DVD rip: disc copied in {monotonic() - started:.0f}s")
+    return backup_root, video_ts
+
+
+def dvd_backup_problem(video_ts):
+    """
+    Check that a dvdbackup copy is a complete DVD-Video folder
+
+    Parameters:
+        video_ts: path of the copied VIDEO_TS folder
+    Returns:
+        str: what is wrong with the copy, or None when it looks complete
+    """
+    if not os.path.isfile(os.path.join(video_ts, "VIDEO_TS.IFO")):
+        return "the copy has no VIDEO_TS.IFO"
+    names = os.listdir(video_ts)
+    if not any(name.upper().endswith(".VOB") for name in names):
+        return "the copy has no video files"
+    for name in names:
+        path = os.path.join(video_ts, name)
+        if os.path.getsize(path) == 0:
+            return f"{name} is empty"
+        if name.upper().endswith(".IFO"):
+            header = b"DVDVIDEO-VMG" if name.upper() == "VIDEO_TS.IFO" else b"DVDVIDEO-VTS"
+            with open(path, "rb") as ifo:
+                if ifo.read(len(header)) != header:
+                    return f"{name} is not a DVD navigation file"
+    return None
+
+
+def disc_size(devpath):
+    """
+    Size of the disc in ``devpath`` in bytes, or the size of a dual-layer DVD if unknown
+
+    Parameters:
+        devpath: device path, e.g. /dev/sr0
+    """
+    try:
+        with open(os.path.join("/sys/class/block", os.path.basename(devpath), "size")) as size:
+            sectors = int(size.read())
+    except (OSError, ValueError):
+        sectors = 0
+    return sectors * 512 if sectors > 0 else DVD9_BYTES
+
+
+def discard_partial_rip(job, rawpath):
+    """
+    Remove the MKV files and track list of a failed rip so the disc can be ripped again
+
+    Parameters:
+        job: arm.models.job.Job
+        rawpath: folder of the failed rip
+    """
+    for name in os.listdir(rawpath):
+        path = os.path.join(rawpath, name)
+        if os.path.isfile(path):
+            os.remove(path)
+    Track.query.filter_by(job_id=job.job_id).delete()
+    db.session.commit()
+
+
+def rip_mainfeature(job, track, rawpath, source=None):
     """
     Find and rip only the main feature when using Blu-rays
 
     Parameters:
         job: arm.models.job.Job
         track: arm.models.track.Track
+        source: MakeMKV source to read (default: the job's disc)
     """
     logging.info(f"Processing track#{track.track_number} as mainfeature. Length is {track.length}s")
     filepathname = os.path.join(rawpath, track.filename)
@@ -779,7 +938,7 @@ def rip_mainfeature(job, track, rawpath):
     cmd += shlex.split(job.config.MKV_ARGS)
     cmd += [
         f"--progress={progress_log(job)}",
-        f"dev:{job.devpath}",
+        source or f"dev:{job.devpath}",
         track.track_number,
         rawpath,
         f"--minlength={job.config.MINLENGTH}",
@@ -789,7 +948,7 @@ def rip_mainfeature(job, track, rawpath):
     collections.deque(run(cmd, OutputType.MSG), maxlen=0)
 
 
-def process_single_tracks(job, rawpath, mode: str):
+def process_single_tracks(job, rawpath, mode: str, source=None):
     """
     Process single tracks by MakeMKV one at a time
 
@@ -797,6 +956,7 @@ def process_single_tracks(job, rawpath, mode: str):
         job: arm.models.job.Job
         rawpath:
         mode: drive mode (auto or manual)
+        source: MakeMKV source to read (default: the job's disc)
     """
     # process one track at a time based on track length
     if mode == 'auto':
@@ -835,7 +995,7 @@ def process_single_tracks(job, rawpath, mode: str):
         cmd += [
             f"--minlength={job.config.MINLENGTH}",
             f"--progress={logfile_base}",
-            f"dev:{job.devpath}",
+            source or f"dev:{job.devpath}",
             track.track_number,
             rawpath,
         ]

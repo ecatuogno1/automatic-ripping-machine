@@ -209,6 +209,14 @@ RIPMETHOD: "mkv"
 RIPMETHOD_DVD: "PLACEHOLDER"
 RIPMETHOD_BR: "PLACEHOLDER"
 
+# Read a DVD once: copy the whole disc to RAW_PATH with dvdbackup in one sequential pass, then have MakeMKV
+# make the titles from that copy instead of reading the disc again for every title.
+# Applies to DVDs that MakeMKV rips (see RIPMETHOD and MAINFEATURE), not to discs with 99-title protection.
+# Requires dvdbackup (apt install dvdbackup) and free space in RAW_PATH for about twice the disc size.
+# If the copy fails the disc is ripped as usual. If MakeMKV fails on the copy, the copy is kept in RAW_PATH
+# and the disc is ripped as usual. false (default) always rips the titles from the disc.
+READ_ONCE_DVD: false
+
 # MakeMKV Arguments
 # MakeMKV Profile used for controlling Audio Track Selection.
 # This is the default profile MakeMKV uses for Audio track selection. Updating this file or changing it is considered
