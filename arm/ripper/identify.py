@@ -23,6 +23,10 @@ from arm.ui import db
 # flake8: noqa: W605
 from arm.ui import utils as ui_utils
 
+# bdmt_eng.xml is a few KB; a disc's file is untrusted, so read and log only this much of it.
+BLURAY_XML_MAX_BYTES = 256 * 1024
+LOGGED_LINE_CHARS = 200
+
 
 def find_mount(devpath: str) -> str | None:
     """
@@ -99,16 +103,21 @@ def identify_bluray(job):
 
     try:
         with open(job.mountpoint + '/BDMV/META/DL/bdmt_eng.xml', "rb") as xml_file:
-            xml_data = xml_file.read()
+            xml_data = xml_file.read(BLURAY_XML_MAX_BYTES + 1)
 
             try:
-                doc = xmltodict.parse(xml_data)
+                if len(xml_data) > BLURAY_XML_MAX_BYTES:
+                    logging.warning("Blu-ray metadata XML is larger than %d bytes; using disc label '%s'.",
+                                    BLURAY_XML_MAX_BYTES, job.label)
+                    doc = None
+                else:
+                    doc = xmltodict.parse(xml_data)
             except xml.parsers.expat.ExpatError as error:
                 lines = xml_data.decode("utf-8", errors="replace").splitlines()
 
                 offending = ""
                 if 1 <= error.lineno <= len(lines):
-                    offending = lines[error.lineno - 1].strip()
+                    offending = lines[error.lineno - 1].strip()[:LOGGED_LINE_CHARS]
 
                 logging.warning(
                     "Malformed Blu-ray metadata XML at line %d column %d: %s\n"
