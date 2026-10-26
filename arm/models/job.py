@@ -304,7 +304,12 @@ class Job(db.Model):
             logging.info("Skipping auto eject")
             self.drive.release_current_job()  # release job without ejecting
             return
-        self.drive.eject()
+        error = self.drive.eject()
+        if error:
+            # Leave ejected unset so the job doesn't claim the disc is out
+            logging.warning(f"Could not eject {self.devpath}: {error.strip()}. If the host automounts "
+                            "optical discs (e.g. a desktop session), it may still be holding the disc.")
+            return
         self.ejected = True
 
     @hybrid_property

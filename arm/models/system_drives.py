@@ -6,10 +6,24 @@ import fcntl
 import logging
 import os
 import re
+import time
 from subprocess import CalledProcessError
 
 from arm.ripper.ProcessHandler import arm_subprocess
 from arm.ui import db
+
+EJECT_ATTEMPTS = 3
+"""How often to try ``eject`` while the drive reports it is busy."""
+EJECT_RETRY_SECONDS = 2
+
+
+def _is_mounted(devpath):
+    """True if ``devpath`` is the source of a mounted filesystem (per /proc/mounts)."""
+    try:
+        with open("/proc/mounts") as mounts:
+            return any(line.split(" ", 1)[0] == devpath for line in mounts)
+    except OSError:
+        return False
 
 
 class CDS(enum.Enum):
@@ -228,11 +242,30 @@ class SystemDrives(db.Model):  # pylint: disable=too-many-instance-attributes
         options = ["--cdrom", "--scsi"]  # exclude floppy and tape drives
         cmd = ["eject", "--verbose"] + options + methods[method] + [self.mount]
         try:
-            arm_subprocess(cmd, check=True)
-        except CalledProcessError as err:
-            return err.stderr
+            # A disc that is still mounted (by ARM or a desktop automounter) can't be ejected
+            if method == "eject" and _is_mounted(self.mount):
+                logging.info(f"Unmounting {self.mount} before ejecting")
+                arm_subprocess(["umount", self.mount])
+            return self._run_eject(cmd)
         finally:
             self.release_current_job()
+
+    def _run_eject(self, cmd):
+        """Run ``cmd``, retrying while the drive is busy (e.g. just after MakeMKV released it)"""
+        error = None
+        for attempt in range(1, EJECT_ATTEMPTS + 1):
+            try:
+                arm_subprocess(cmd, check=True)
+                return None
+            except CalledProcessError as err:
+                # arm_subprocess merges stderr into output
+                error = err.output or f"eject exited with status {err.returncode}"
+            if attempt == EJECT_ATTEMPTS or "busy" not in error.lower():
+                break
+            logging.info(f"Drive {self.mount} is busy, retrying eject in {EJECT_RETRY_SECONDS}s "
+                         f"({attempt} of {EJECT_ATTEMPTS})")
+            time.sleep(EJECT_RETRY_SECONDS)
+        return error
 
     def debug(self, logger=logging):
         """
