@@ -204,7 +204,7 @@ def identify_dvd(job):
         job.crc_id = str(crc64)
         urlstring = f"https://1337server.pythonanywhere.com/api/v1/?mode=s&crc64={crc64}"
         logging.debug(urlstring)
-        dvd_info_xml = urllib.request.urlopen(urlstring).read()
+        dvd_info_xml = urllib.request.urlopen(urlstring, timeout=10).read()
         arm_api_json = json.loads(dvd_info_xml)
         logging.debug(f"dvd xml - {arm_api_json}")
         logging.debug(f"results = {arm_api_json['results']}")
