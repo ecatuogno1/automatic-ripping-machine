@@ -358,6 +358,9 @@
                                             <th scope="col" style="text-align:left">Manual Process</th>
                                         {% endif %}
                                         <th scope="col" style="text-align:left">Ripped</th>
+                                        {% if jobs.video_type == "Music" %}
+                                            <th scope="col" style="text-align:left">AccurateRip</th>
+                                        {% endif %}
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -381,6 +384,15 @@
                                                 </td>
                                             {% endif %}
                                             <td style="text-align:left">{{ track.ripped }}</td>
+                                            {% if jobs.video_type == "Music" %}
+                                                <td style="text-align:left" title="{{ track.error or '' }}">
+                                                    {% if track.status == "success" %}
+                                                        <span class="badge badge-success">Match</span>
+                                                    {% elif track.status == "fail" %}
+                                                        <span class="badge badge-danger">No match</span>
+                                                    {% endif %}
+                                                </td>
+                                            {% endif %}
                                         </tr>
                                     {% endfor %}
                                     </tbody>

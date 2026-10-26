@@ -569,12 +569,33 @@ def verify_music_rip(job, disc, output_dir, extensions, started):
         text = f"AccurateRip: tracks not verified: {error}"
     else:
         text = accuraterip.summary(result)
+        record_accuraterip_tracks(job, result)
     logging.info(text)
     notify(job, NOTIFY_TITLE, f"Music CD: {job.title} {text}")
     mismatched = any(row["status"] != "match" for row in result.get("tracks", []))
     if mismatched and cfg.arm_config.get("ACCURATERIP_FAIL_ON_MISMATCH"):
         return text
     return None
+
+
+def record_accuraterip_tracks(job, result):
+    """
+    Store each music track's AccurateRip result on its Track row for the job page\n
+    status is "success" when the track matched, "fail" when it did not.
+    """
+    rows = {row["track"]: row for row in result["tracks"]}
+    if not rows:
+        return
+    for track in job.tracks:
+        number = str(track.track_number)
+        row = rows.get(int(number)) if number.isdigit() else None
+        if row is None:
+            continue
+        if row["status"] == "match":
+            track.status, track.error = "success", f"AccurateRip confidence {row['confidence']}"
+        else:
+            track.status, track.error = "fail", "Did not match AccurateRip"
+    db.session.commit()
 
 
 def rip_data(job):
