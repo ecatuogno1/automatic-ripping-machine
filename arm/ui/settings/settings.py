@@ -18,6 +18,7 @@ import platform
 import importlib
 import re
 import subprocess
+import time
 from datetime import datetime
 import os
 
@@ -45,6 +46,25 @@ route_settings = Blueprint('route_settings', __name__,
                            template_folder='templates',
                            static_folder='../static')
 REDIRECT_SETTINGS = "route_settings.settings"
+
+# Version/update checks (git, GitHub API) and the HandBrakeCLI hardware probe are slow
+# and their results rarely change, so reuse them for a while instead of on every page load
+CHECK_CACHE_SECONDS = 600
+_check_cache = {}
+
+
+def cached_check(key, func, *args):
+    """
+    Return func(*args), reusing the result for CHECK_CACHE_SECONDS.
+    The key should include anything the result depends on (e.g. a config value).
+    """
+    now = time.monotonic()
+    hit = _check_cache.get(key)
+    if hit is not None and now - hit[0] < CHECK_CACHE_SECONDS:
+        return hit[1]
+    value = func(*args)
+    _check_cache[key] = (now, value)
+    return value
 
 
 def mask_last(value, n=4):
@@ -84,8 +104,9 @@ def settings():
     server_timezone = os.environ.get("TZ", "Etc/UTC")
     current_time = datetime.now()
     server_datetime = current_time.strftime(cfg.arm_config['DATE_FORMAT'])
-    [arm_version_local, arm_version_remote] = ui_utils.git_check_version()
-    local_git_hash = ui_utils.get_git_revision_hash()
+    install_path = cfg.arm_config['INSTALLPATH']
+    [arm_version_local, arm_version_remote] = cached_check(("version", install_path), ui_utils.git_check_version)
+    local_git_hash = cached_check(("git_hash", install_path), ui_utils.get_git_revision_hash)
 
     stats = {'server_datetime': server_datetime,
              'server_timezone': server_timezone,
@@ -98,7 +119,7 @@ def settings():
              'cds_ripped': cds,
              'no_failed_jobs': failed_rips,
              'total_rips': total_rips,
-             'updated': ui_utils.git_check_updates(local_git_hash),
+             'updated': cached_check(("updated", local_git_hash), ui_utils.git_check_updates, local_git_hash),
              'hw_support': check_hw_transcode_support()
              }
 
@@ -145,6 +166,12 @@ def settings():
 
 
 def check_hw_transcode_support():
+    """Hardware encoders HandBrake reports, probed at most every CHECK_CACHE_SECONDS"""
+    return cached_check(("hw_support", cfg.arm_config['HANDBRAKE_CLI']), probe_hw_transcode_support)
+
+
+def probe_hw_transcode_support():
+    """Run HandBrakeCLI and look for the hardware encoders it reports as available"""
     cmd = f"nice {cfg.arm_config['HANDBRAKE_CLI']}"
 
     app.logger.debug(f"Sending command: {cmd}")
