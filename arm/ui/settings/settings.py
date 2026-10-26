@@ -9,8 +9,9 @@ Covers
 - systeminfo [POST]
 - systemdrivescan [POST]
 - update_arm [POST]
-- drive_eject [GET]
-- drive_remove [GET]
+- drive_eject [POST]
+- drive_remove [POST]
+- drive_manual [POST]
 - testapprise [POST]
 - updatesysinfo [POST]
 """
@@ -342,7 +343,7 @@ def system_drive_scan():
     return redirect(url_for(REDIRECT_SETTINGS))
 
 
-@route_settings.route('/drive/eject/<eject_id>')
+@route_settings.route('/drive/eject/<eject_id>', methods=['POST'])
 @login_required
 def drive_eject(eject_id):
     """
@@ -366,7 +367,7 @@ def drive_eject(eject_id):
     return redirect(url_for(REDIRECT_SETTINGS))
 
 
-@route_settings.route('/drive/remove/<remove_id>')
+@route_settings.route('/drive/remove/<remove_id>', methods=['POST'])
 @login_required
 def drive_remove(remove_id):
     """
@@ -385,7 +386,7 @@ def drive_remove(remove_id):
     return redirect(url_for(REDIRECT_SETTINGS))
 
 
-@route_settings.route('/drive/manual/<manual_id>')
+@route_settings.route('/drive/manual/<manual_id>', methods=['POST'])
 @login_required
 def drive_manual(manual_id):
     """

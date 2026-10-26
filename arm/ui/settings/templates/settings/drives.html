@@ -57,16 +57,16 @@
                                                             >
                                                         {% elif drive.open %}
                                                             <!-- image from source: https://openclipart.org/detail/34543/tango-drive-optical -->
-                                                            <a href="drive/eject/{{ drive.drive_id }}">
+                                                            <button type="submit" form="driveEject{{ drive.drive_id }}" class="btn btn-link p-0">
                                                                 <img
                                                                     class="img-fluid"
                                                                     src="static/img/drive-optical_open.svg"
                                                                     alt="Drive Open"
                                                                     title="{{ drive.tray }}"
                                                                 >
-                                                            </a>
+                                                            </button>
                                                         {% else %}
-                                                            <a href="drive/eject/{{ drive.drive_id }}">
+                                                            <button type="submit" form="driveEject{{ drive.drive_id }}" class="btn btn-link p-0">
                                                                 <!-- image modified from source: https://openclipart.org/detail/86713/cycle-icon -->
                                                                 <img
                                                                     class="img-fluid"
@@ -78,7 +78,7 @@
                                                                     alt="Drive Closed"
                                                                     title="{{ drive.tray }}"
                                                                 >
-                                                            </a>
+                                                            </button>
                                                         {% endif %}
                                                         <figcaption class="figure-caption text-left invisible">Placeholder</figcaption>
                                                     </figure>
@@ -137,15 +137,25 @@
                                                 <button type="submit" class="btn btn-primary btn-sm text-nowrap" name="submit">
                                                     Update
                                                 </button>
-                                                <a href="drive/manual/{{ drive.drive_id }}" class="btn btn-secondary btn-sm text-nowrap">
+                                                <button type="submit" form="driveManual{{ drive.drive_id }}" class="btn btn-secondary btn-sm text-nowrap">
                                                     Manual
-                                                </a>
-                                                <a href="drive/remove/{{ drive.drive_id }}" class="btn btn-outline-danger btn-sm text-nowrap">
+                                                </button>
+                                                <button type="submit" form="driveRemove{{ drive.drive_id }}" class="btn btn-outline-danger btn-sm text-nowrap">
                                                     Remove
-                                                </a>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
+                                </form>
+                                <!-- The tray, Manual and Remove buttons above submit these POST forms (forms cannot nest) -->
+                                <form id="driveEject{{ drive.drive_id }}" action="drive/eject/{{ drive.drive_id }}" method="post">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                </form>
+                                <form id="driveManual{{ drive.drive_id }}" action="drive/manual/{{ drive.drive_id }}" method="post">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                </form>
+                                <form id="driveRemove{{ drive.drive_id }}" action="drive/remove/{{ drive.drive_id }}" method="post">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 </form>
                             </div>
                         </div>
