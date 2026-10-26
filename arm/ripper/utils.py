@@ -8,6 +8,7 @@ import shutil
 import time
 import random
 import re
+import shlex
 from logging import Logger
 from pathlib import Path, PurePath
 from math import ceil
@@ -119,10 +120,20 @@ def notify_entry(job):
         raise RipperException("Could not determine disc type")
 
 
+def executable_name(command):
+    """
+    Process name a configured command runs as, for comparing with psutil names:
+    the executable's file name without its path or arguments, lower-cased
+    ('/usr/bin/ffmpeg -hide_banner' -> 'ffmpeg', 'FFMPEG' -> 'ffmpeg')
+    """
+    parts = shlex.split(command or "")
+    return os.path.basename(parts[0]).lower() if parts else ""
+
+
 def sleep_check_process(process_str, max_processes, sleep=(20, 120, 10)):
     """
     New function to check for max_transcode from job.config and force obey limits\n
-    :param str process_str: The process string from arm.yaml
+    :param str process_str: The process string from arm.yaml (a name, path or command line)
     :param int max_processes: The user defined limit for maximum transcodes
     :param (tuple, int) sleep: tuple: (min sleep time, max sleep time, step) or sleep time as int.
     :return bool: when we have space in the transcode queue
@@ -134,13 +145,15 @@ def sleep_check_process(process_str, max_processes, sleep=(20, 120, 10)):
     if not isinstance(sleep, tuple):
         raise TypeError(sleep)
     loop_count = max_processes + 1
+    # FFMPEG_CLI may be a path, carry arguments or differ in case from the running process name
+    process_name = executable_name(process_str)
     logging.info(f"Starting sleep check of {process_str}")
     while loop_count >= max_processes:
         # The process might disappear during loops, so we need to query the
         # name upfront.
         loop_count = sum(
             1 for proc in psutil.process_iter(['name'])
-            if proc.info.get('name') == process_str
+            if (proc.info.get('name') or "").lower() == process_name
         )
         if max_processes > loop_count:
             break
