@@ -121,6 +121,11 @@
                         addToast("Saved Successfully", `Saved ${data.form} settings at ${time}`, toastCount);
                         toastCount++;
                     }
+                }).fail(function (xhr) {
+                    // e.g. a refused CSRF token: say the settings were not saved instead of nothing
+                    const reason = (xhr.responseJSON && xhr.responseJSON.message) || `${xhr.status} ${xhr.statusText}`;
+                    addToast("Not saved", reason, toastCount);
+                    toastCount++;
                 });
             }
 

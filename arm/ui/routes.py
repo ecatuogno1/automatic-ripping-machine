@@ -12,7 +12,9 @@ Other routes handled in flask blueprints
 import os
 import json
 from pathlib import Path, PurePath
+from urllib.parse import urlparse
 from werkzeug.exceptions import HTTPException
+from flask_wtf.csrf import CSRFError
 from flask import Flask, render_template, request, flash, \
     redirect, url_for, session   # noqa: F401
 from flask.logging import default_handler  # noqa: F401
@@ -96,6 +98,25 @@ def was_error(error):
     :return: Error page
     """
     return render_template(constants.ERROR_PAGE, title='error', error=error)
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(error):
+    """
+    A form or action sent with a missing or out-of-date CSRF token, e.g. from a page loaded before
+    signing out. Nothing was changed: say so, and send a form from ARM's own page back to it (which
+    then carries a fresh token) instead of Werkzeug's bare 400 page.
+    """
+    app.logger.info(f"Refused {request.method} {request.path}: {error.description}")
+    message = "This page was out of date, so ARM didn't apply that action. Try it again."
+    referrer = urlparse(request.referrer or '')
+    from_arm_page = referrer.netloc == request.host and referrer.scheme in ('http', 'https')
+    scripted = request.path.startswith('/json') or request.accept_mimetypes.best == constants.JSON_TYPE \
+        or request.headers.get('X-Requested-With')
+    if scripted or not from_arm_page:
+        return {'success': False, 'message': message, 'Error': message}, 400
+    flash(message, "danger")
+    return redirect(referrer.geturl())
 
 
 @app.errorhandler(Exception)
