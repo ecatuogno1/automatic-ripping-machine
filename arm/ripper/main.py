@@ -6,6 +6,7 @@ For help please visit https://github.com/automatic-ripping-machine/automatic-rip
 """
 import argparse  # noqa: E402
 import logging  # noqa: E402
+import os
 import sys
 import time  # noqa: E402
 import datetime  # noqa: E402
@@ -83,6 +84,23 @@ def log_arm_params(job):
                 "MAX_CONCURRENT_TRANSCODES", "MAX_CONCURRENT_MAKEMKVINFO"):
         logging.info(f"{key.lower()}: {str(cfg.arm_config.get(key, '<not given>'))}")
     logging.info("******************* End of config parameters *******************")
+
+
+def set_umask():
+    """
+    Apply UMASK from arm.yaml to this process, so the files and folders ARM and the tools it
+    starts (MakeMKV, HandBrake, abcde) create get the permissions the user asked for
+    """
+    umask = cfg.arm_config.get("UMASK")
+    if not umask:
+        return
+    try:
+        value = int(str(umask), 8)
+    except ValueError:
+        logging.error(f"Ignoring UMASK {umask}: it is not an octal value such as 0o002")
+        return
+    logging.info(f"Setting umask to {umask}")
+    os.umask(value)
 
 
 def check_fstab():
@@ -174,6 +192,7 @@ def setup():
     # Setup base logger - will log to <log directory>/arm.log, syslog & stdout
     # This will catch any permission errors
     arm_log = logger.create_early_logger(syslog=args.syslog)
+    set_umask()
     # Make sure all directories are fully setup
     utils.arm_setup(arm_log)
     drive = SystemDrives.query.filter_by(mount=devpath).one()  # unique mounts
