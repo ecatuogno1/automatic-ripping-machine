@@ -238,6 +238,22 @@ def setup():
     log_udev_params(devpath)
 
 
+def finish_with_drive(job):
+    """
+    Eject the disc at the end of the job, unless the job failed because ARM could not tell
+    what kind of disc it is. Ejecting that disc hides the problem (the drive then just reports
+    "no medium") and on drives that pull the tray back in it starts the same failing job again,
+    so it stays in the drive for the user to look at (#1822).
+    """
+    if job.status == JobState.FAILURE.value and job.disctype not in ("dvd", "bluray", "music", "data"):
+        logging.warning(f"Disc type '{job.disctype}' could not be determined. "
+                        f"Leaving the disc in {job.devpath} instead of ejecting it.")
+        if job.drive is not None:
+            job.drive.release_current_job()
+        return
+    job.eject()  # each job stores its eject status, so it is safe to call.
+
+
 if __name__ == "__main__":
     job = None
     try:
@@ -273,7 +289,7 @@ if __name__ == "__main__":
             job.status = JobState.SUCCESS.value
     finally:
         if job:
-            job.eject()  # each job stores its eject status, so it is safe to call.
+            finish_with_drive(job)
             job.stop_time = datetime.datetime.now()
             if job.start_time:
                 job_length = job.stop_time - job.start_time
