@@ -85,6 +85,7 @@ def identify(job):
             else:
                 job.hasnicetitle = False
                 db.session.commit()
+            reuse_manual_identity(job)
 
             logging.info(f"Disc title Post ident -  title:{job.title} "
                          f"year:{job.year} video_type:{job.video_type} "
@@ -92,6 +93,36 @@ def identify(job):
             logging.debug(f"identify.job.end ---- \n\r{job.pretty_table()}")
     # No need to warn if we cant unmount
     arm_subprocess(["umount", job.devpath])
+
+
+def reuse_manual_identity(job):
+    """
+    REUSE_MANUAL_IDENTITY: give a re-inserted DVD the identity set by hand for the same disc before
+
+    A disc whose rip failed or was abandoned is often inserted again (sometimes in another drive).
+    The earlier job with the same crc64 and a title set in the ARM ui (Title Search or Custom Title)
+    lends its title and whatever else was chosen by hand.
+
+    :param job: the job being identified
+    :return: True if an earlier manual identity was applied
+    """
+    if not cfg.arm_config.get("REUSE_MANUAL_IDENTITY", False) or not job.crc_id:
+        return False
+    earlier = Job.query.filter(Job.crc_id == job.crc_id, Job.job_id != job.job_id,
+                               Job.title_manual.isnot(None), Job.title_manual != "") \
+        .order_by(Job.job_id.desc()).first()
+    if earlier is None:
+        return False
+    args = {"title": earlier.title_manual, "title_manual": earlier.title_manual, "hasnicetitle": True}
+    for field in ("year", "video_type", "imdb_id", "poster_url"):
+        if getattr(earlier, field + "_manual"):
+            args[field] = args[field + "_manual"] = getattr(earlier, field + "_manual")
+    if "year" not in args and earlier.year:
+        # Custom Title stores the year it was given in "year" only
+        args["year"] = earlier.year
+    logging.info(f"Same disc as job {earlier.job_id}: reusing its manual title {earlier.title_manual}")
+    utils.database_updater(args, job)
+    return True
 
 
 def identify_bluray(job):
