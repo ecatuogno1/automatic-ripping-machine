@@ -176,6 +176,7 @@ def rip(tmp_path, monkeypatch):
     updates, notes, served = [], [], {}
     monkeypatch.setattr(utils, "database_updater", lambda values, job: updates.append(values))
     monkeypatch.setattr(utils, "notify", lambda job, title, body: notes.append(body))
+    monkeypatch.setattr(utils, "record_accuraterip_tracks", lambda job, result: None)
     monkeypatch.setattr(requests, "get", lambda url, timeout: SimpleNamespace(**served))
     job = SimpleNamespace(disctype="music", devpath="/dev/sr0", title="Album",
                           config=SimpleNamespace(LOGPATH=str(tmp_path)))
