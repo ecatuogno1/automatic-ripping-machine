@@ -258,14 +258,16 @@ def identify_dvd(job):
     output = arm_subprocess(["lsdvd", "-Oy", job.devpath])
     if output:
         try:
-            # literal_eval only accepts literals so we have to adjust the output slightly
-            tracks = literal_eval(re.sub(r"^.*\{", "{", output)).get("track", [])
+            # literal_eval only accepts literals, so keep only the "lsdvd = {...}" dict. libdvdread
+            # can print diagnostics (e.g. "Zero check failed in src/ifo_read.c") on lines before it.
+            start, end = output.find("{"), output.rfind("}")
+            tracks = literal_eval(output[start:end + 1]).get("track", []) if 0 <= start < end else []
             logging.debug(f"Detected {len(tracks)} tracks")
             if len(tracks) == 99:
                 job.has_track_99 = True
                 if cfg.arm_config["PREVENT_99"]:
                     raise utils.RipperException("Track 99 found and PREVENT_99 is enabled")
-        except (SyntaxError, AttributeError) as e:
+        except (SyntaxError, ValueError, TypeError, AttributeError) as e:
             logging.error("Failed to parse lsdvd output", exc_info=e)
 
     return True
