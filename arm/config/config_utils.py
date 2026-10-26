@@ -16,6 +16,7 @@ def arm_yaml_check_groups(comments, key):
                       'HB_PRESET_DVD': "\n" + comments['ARM_CFG_GROUPS']['HANDBRAKE'],
                       'EMBY_REFRESH': "\n" + comments['ARM_CFG_GROUPS']['EMBY']
                                       + "\n" + comments['ARM_CFG_GROUPS']['EMBY_ADDITIONAL'],
+                      'RADARR_URL': "\n" + comments['ARM_CFG_GROUPS']['ARR'],
                       'NOTIFY_RIP': "\n" + comments['ARM_CFG_GROUPS']['NOTIFY_PERMS'],
                       'APPRISE': "\n" + comments['ARM_CFG_GROUPS']['APPRISE']}
     if key in comment_groups:
