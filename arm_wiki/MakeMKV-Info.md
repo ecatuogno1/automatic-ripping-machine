@@ -29,6 +29,16 @@ Two specific settings that may be particularly useful to create or copy are the 
 > * While the `dvd_MinimumTitleLength` (corresponding to the GUIs Preferences > Video > "Minimum title length (seconds)" setting) is harmless to create, it has no effect as it is overriden by A.R.M.'s `MINLENGTH` setting.
 > * The `app_Key` should be left untouched. If you have a permanent key see [MakeMKV Licence](#makemkv-licence) above.
 
+### Stopping a hung MakeMKV run: `STALL_ABORT_SECONDS`
+A damaged disc or an unresponsive drive can leave `makemkvcon` running without ever finishing, and the job then sits
+in "info" or "ripping" forever. Set `STALL_ABORT_SECONDS` (in "Arm Settings" > "Ripper Settings", or in `arm.yaml`) to
+a number of seconds to stop such a run: when MakeMKV has printed nothing and its progress has not changed for that
+long, A.R.M. stops `makemkvcon` and fails the job; the job log says "MakeMKV made no progress for N seconds and was
+stopped".
+
+MakeMKV can be silent for several minutes while it scans a disc (there is no progress bar during a scan), so choose a
+generous value such as `1800` (30 minutes). `0` (the default) turns this off.
+
 ### Profiles
 MakeMKV can also use the concept of profiles to decide which audio tracks and which subtitle tracks to include in the 
 *.mkv files. The defaults are usually sufficient. However, A.R.M. allows you to change these defaults if needed.  This is 
