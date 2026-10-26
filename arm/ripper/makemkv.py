@@ -554,7 +554,7 @@ def makemkv_info(job, select=None, index=9999, options=None):
     Parameters:
         job: arm.models.job.Job
         select (OutputType): Message Type (default: all)
-        index: Makemkv disc index (default: all)
+        index: Makemkv disc index (default: all), or a source string such as "dev:/dev/sr0"
         options: Additional options to be passed to makemkvcon (default: [])
     Yields:
         dataclasses of selected type:
@@ -594,7 +594,8 @@ def makemkv_info(job, select=None, index=9999, options=None):
     if not isinstance(options, list):
         raise TypeError(options)
     # 1MB cache size to get info on the specified disc(s)
-    info_options = ["info", "--cache=1"] + options + [f"disc:{index:d}", f"--minlength={job.config.MINLENGTH}"]
+    source = index if isinstance(index, str) else f"disc:{index:d}"
+    info_options = ["info", "--cache=1"] + options + [source, f"--minlength={job.config.MINLENGTH}"]
     wait_time = job.config.MANUAL_WAIT_TIME
     max_processes = cfg.arm_config["MAX_CONCURRENT_MAKEMKVINFO"]
     job.status = JobState.VIDEO_WAITING.value
@@ -630,13 +631,14 @@ def get_drives(job):
             yield drive
 
 
-def makemkv_backup(job, rawpath):
+def makemkv_backup(job, rawpath, index):
     """
     Rip BluRay with Backup Method
 
     Parameters:
         job: arm.models.job.Job
         rawpath:
+        index: MakeMKV disc index of the job's drive
     """
     # backup method
     cmd = [
@@ -647,7 +649,7 @@ def makemkv_backup(job, rawpath):
     cmd += [
         f"--minlength={job.config.MINLENGTH}",
         f"--progress={progress_log(job)}",
-        f"disc:{job.drive.mdisc:d}",
+        f"disc:{index:d}",
         rawpath,
     ]
     logging.info("Backing up disc")
@@ -665,8 +667,8 @@ def makemkv_mkv(job, rawpath):
     # Get drive mode for the current drive
     mode = utils.get_drive_mode(job.devpath)
     logging.info(f"Job running in {mode} mode")
-    # Get track info form mkv rip
-    get_track_info(job.drive.mdisc, job)
+    # Get track info from the same device the mkv rip reads
+    get_track_info(f"dev:{job.devpath}", job)
     # route to ripping functions.
     if job.config.MAINFEATURE:
         logging.info("Trying to find mainfeature (sorting by chapters desc, filesize desc, track_number asc)")
@@ -710,6 +712,42 @@ def makemkv_mkv(job, rawpath):
         process_single_tracks(job, rawpath, 'auto')
 
 
+def uses_disc_index(job):
+    """True when the rip addresses the disc by MakeMKV disc index (disc:N) rather than dev:<path>."""
+    return job.config.RIPMETHOD in ("backup", "backup_dvd") and job.disctype == "bluray"
+
+
+def makemkv_disc_index(job):
+    """
+    MakeMKV disc index of the job's drive, from the database or from a scan of every drive
+
+    Parameters:
+        job: arm.models.job.Job
+    Returns:
+        int: MakeMKV disc index
+    Raises:
+        RipperException when MakeMKV does not list a drive at the job's device
+    """
+    if job.drive is not None and job.drive.mdisc is not None:
+        return job.drive.mdisc
+    logging.debug("Storing new MakeMKV disc numbers to database.")
+    disc_index = None
+    with db.session.no_autoflush:
+        for drive in get_drives(job):
+            for db_drive in SystemDrives.query.filter_by(mount=drive.mount).all():
+                db_drive.mdisc = drive.index
+                db.session.add(db_drive)
+            # Track disc index for current job's device
+            if drive.mount == job.devpath:
+                disc_index = drive.index
+    db.session.commit()
+    # Refresh job to get updated drive relationship
+    db.session.refresh(job)
+    if disc_index is None:
+        raise utils.RipperException(f"MakeMKV did not list a drive at {job.devpath}")
+    return disc_index
+
+
 def makemkv(job):
     """
     Rip Blu-rays/DVDs with MakeMKV
@@ -722,36 +760,19 @@ def makemkv(job):
     # confirm MKV is working, beta key hasn't expired
     prep_mkv()
     logging.info(f"Starting MakeMKV rip. Method is {job.config.RIPMETHOD}")
-    # get MakeMKV disc number
-    # Fix: Check if job.drive is None before accessing job.drive.mdisc
-    if job.drive is None or job.drive.mdisc is None:
-        logging.debug("Storing new MakeMKV disc numbers to database.")
-        disc_index = None
-        with db.session.no_autoflush:
-            for drive in get_drives(job):
-                for db_drive in SystemDrives.query.filter_by(mount=drive.mount).all():
-                    db_drive.mdisc = drive.index
-                    db.session.add(db_drive)
-                    # Track disc index for current job's device
-                    if drive.mount == job.devpath:
-                        disc_index = drive.index
-        db.session.commit()
-        # Refresh job to get updated drive relationship
-        db.session.refresh(job)
-        # If job.drive is still None after refresh, log warning with available info
-        if job.drive is None:
-            if disc_index is not None:
-                logging.warning(f"job.drive is None but found disc index {disc_index} for {job.devpath}")
-            else:
-                logging.error(f"Could not find drive for {job.devpath}")
-                raise ValueError(f"No drive found for device {job.devpath}")
-    logging.info(f"MakeMKV disc number: {job.drive.mdisc:d}")
+    if uses_disc_index(job):
+        index = makemkv_disc_index(job)
+        logging.info(f"MakeMKV disc number: {index:d}")
+    else:
+        # The mkv rip reads dev:<path>, so it needs no disc index (and no disc:9999 scan of every drive)
+        index = None
+        logging.info(f"MakeMKV reads the job's drive directly: dev:{job.devpath}")
     # get filesystem in order
     rawpath = setup_rawpath(job, os.path.join(str(job.config.RAW_PATH), str(job.title)))
     logging.info(f"Processing files to: {rawpath}")
     # Rip BluRay
-    if (job.config.RIPMETHOD in ("backup", "backup_dvd")) and job.disctype == "bluray":
-        makemkv_backup(job, rawpath)
+    if uses_disc_index(job):
+        makemkv_backup(job, rawpath, index)
     # Rip BluRay or DVD
     elif job.config.RIPMETHOD == "mkv" or job.disctype == "dvd":
         makemkv_mkv(job, rawpath)
