@@ -33,3 +33,10 @@ The check uses the API key of the selected `METADATA_PROVIDER` and makes a few e
 identified as before: their title length is not known until MakeMKV scans the disc.
 
 The default is `false`.
+
+## Skipping the manual wait for confirmed discs (MANUAL_WAIT_SKIP_VERIFIED)
+
+With `MANUAL_WAIT` enabled, every disc waits `MANUAL_WAIT_TIME` seconds so you can correct its title in the
+ARM ui. Set `MANUAL_WAIT_SKIP_VERIFIED: true` to start ripping at once when `IDENTIFY_BY_RUNTIME` confirmed the
+disc's title by its runtime. Discs it did not confirm (including every Blu-ray, and every disc identified by the
+usual title search) still wait. The default is `false`, which waits for every disc.

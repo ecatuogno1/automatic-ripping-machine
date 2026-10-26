@@ -24,6 +24,7 @@
   "MAXLENGTH": "# Maximum length of track for ARM rip (in seconds)\n# Use \"99999\" to indicate no maximum length",
   "MANUAL_WAIT": "# Wait for manual identification",
   "MANUAL_WAIT_TIME": "# Wait time for manual identification (in seconds)",
+  "MANUAL_WAIT_SKIP_VERIFIED": "# Skip the manual identification wait for a DVD whose title IDENTIFY_BY_RUNTIME confirmed by its runtime.\n# Discs that were not confirmed still wait. false (default) waits for every disc",
   "DATE_FORMAT": "# Allows you to format the date/time to your own liking\n# This will be used throughout ARM and ARMui",
   "ALLOW_DUPLICATES": "## Do you want to allow Rips of the same disk multiple times\n## With this set as false the task will exit if it recognises the same movie being ripped\n## recommended to set to true for series ",
   "MAX_CONCURRENT_TRANSCODES": "# Number of Transcodes that runs at the same time.\n# Certain Video cards are limited to how many encodes they can run at the same time.\n# Also useful for diminishing returns on CPU based encodes.\n# Set to 0 to disable",

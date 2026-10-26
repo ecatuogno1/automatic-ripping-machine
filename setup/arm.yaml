@@ -67,6 +67,10 @@ MANUAL_WAIT: true
 # Wait time for manual identification (in seconds)
 MANUAL_WAIT_TIME: 60
 
+# Skip the manual identification wait for a DVD whose title IDENTIFY_BY_RUNTIME confirmed by its runtime.
+# Discs that were not confirmed still wait. false (default) waits for every disc
+MANUAL_WAIT_SKIP_VERIFIED: false
+
 # Allows you to format the date/time to your own liking
 # This will be used throughout ARM and ARMui
 DATE_FORMAT: "%m-%d-%Y %H:%M:%S"
