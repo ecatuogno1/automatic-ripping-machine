@@ -117,6 +117,8 @@ def main():
     logging.debug(f"Value of have_dupes: {have_dupes}")
 
     utils.notify_entry(job)
+    # In manual drive mode list the titles first, so they can be chosen during the wait
+    arm_ripper.scan_tracks_for_manual_mode(job)
     # Check if user has manual wait time enabled
     utils.check_for_wait(job)
 

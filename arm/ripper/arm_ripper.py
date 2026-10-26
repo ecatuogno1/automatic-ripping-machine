@@ -211,6 +211,23 @@ def move_files_post(transcode_out_path, job):
                 utils.move_files(transcode_out_path, track.filename, job, track.main_feature)
 
 
+def scan_tracks_for_manual_mode(job):
+    """
+    In manual drive mode, list the disc's titles before the MANUAL_WAIT\n
+    Otherwise MakeMKV only lists them once the wait is over, so the job page has no tracks
+    to choose while ARM waits. Only done when the rip goes through MakeMKV's manual track selection.
+    :param job: current job
+    :return: None
+    """
+    if job.disctype not in ("dvd", "bluray") or utils.get_drive_mode(job.devpath) != "manual":
+        return
+    bluray_backup = job.disctype == "bluray" and job.config.RIPMETHOD in ("backup", "backup_dvd")
+    mkv_rip = job.config.RIPMETHOD == "mkv" or job.disctype == "dvd"
+    if rip_with_mkv(job, job.has_track_99) and mkv_rip and not bluray_backup and not job.config.MAINFEATURE:
+        logging.info("Manual mode: listing the disc's titles before waiting")
+        makemkv.scan_tracks(job)
+
+
 def rip_with_mkv(current_job, protection=0):
     """
     Test to check if title was or should be ripped by MakeMKV\n
