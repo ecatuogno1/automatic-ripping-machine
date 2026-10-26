@@ -969,7 +969,8 @@ def progress_log(job):
     """
     logfile = os.path.join(job.config.LOGPATH, "progress", f"{job.job_id:d}.log")
     logging.debug(f"logging progress to '{logfile}'")
-    return shlex.quote(logfile)
+    # Passed to makemkvcon as a plain argument (no shell): quoting would put the quotes into the path
+    return logfile
 
 
 class TrackInfoProcessor:
