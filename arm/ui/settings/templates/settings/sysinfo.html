@@ -1,3 +1,23 @@
+{% macro storage_item(label, free, percent, path) %}
+                        <li class="list-group-item">
+                            {% if free is not none %}
+                                <h6 class="progress-label" style="float: left;margin-right: 1em;">{{ label }}: </h6>
+                                <div class="progress">
+                                    <div class="progress-bar{{ ' bg-danger' if percent > 80 }}"
+                                         role="progressbar"
+                                         style="width: {{ percent }}%;"
+                                         aria-valuenow="{{ percent }}"
+                                         aria-valuemin="0"
+                                         aria-valuemax="100">{{ percent }}%
+                                    </div>
+                                </div>
+                                <br> Free Space: {{ free }} GB
+                            {% else %}
+                                {{ label }}: Unable to get data on path
+                            {% endif %}
+                            <br>Path: {{ path }}
+                        </li>
+{% endmacro %}
 {% block sysinfo %}
     <style>
         .progress-bar {
@@ -80,42 +100,11 @@
                         <strong>Storage</strong>
                     </div>
                     <ul class="list-group list-group-flush">
-                        <li class="list-group-item">
-                            {% if serverutil.storage_transcode_free is not none %}
-                                <h6 class="progress-label" style="float: left;margin-right: 1em;">Transcode: </h6>
-                                <div class="progress">
-                                    <div class="progress-bar{{ ' bg-danger' if serverutil.storage_transcode_percent > 80 }}"
-                                         role="progressbar"
-                                         style="width: {{ serverutil.storage_transcode_percent }}%;"
-                                         aria-valuenow="{{ serverutil.storage_transcode_percent }}"
-                                         aria-valuemin="0"
-                                         aria-valuemax="100">{{ serverutil.storage_transcode_percent }}%
-                                    </div>
-                                </div>
-                                <br> Free Space: {{ serverutil.storage_transcode_free }} GB
-                            {% else %}
-                                Transcode: Unable to get data on path
-                            {% endif %}
-                            <br>Path: {{ arm_path }}
-                        </li>
-                        <li class="list-group-item">
-                            {% if serverutil.storage_completed_free is not none %}
-                                <h6 class="progress-label" style="float: left;margin-right: 1em;">Completed: </h6>
-                                <div class="progress">
-                                    <div class="progress-bar{{ ' bg-danger' if serverutil.storage_completed_percent > 80 }}"
-                                         role="progressbar"
-                                         style="width: {{ serverutil.storage_completed_percent }}%;"
-                                         aria-valuenow="{{ serverutil.storage_completed_percent }}"
-                                         aria-valuemin="0"
-                                         aria-valuemax="100">{{ serverutil.storage_completed_percent }}%
-                                    </div>
-                                </div>
-                                <br> Free Space: {{ serverutil.storage_completed_free }} GB
-                            {% else %}
-                                Completed: Unable to get data on path
-                            {% endif %}
-                            <br>Path: {{ media_path }}
-                        </li>
+                        {{ storage_item("Raw", serverutil.storage_raw_free, serverutil.storage_raw_percent, raw_path) }}
+                        {{ storage_item("Transcode", serverutil.storage_transcode_free,
+                                        serverutil.storage_transcode_percent, arm_path) }}
+                        {{ storage_item("Completed", serverutil.storage_completed_free,
+                                        serverutil.storage_completed_percent, media_path) }}
                     </ul>
                 </div>
             </div>

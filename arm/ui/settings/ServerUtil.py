@@ -91,6 +91,8 @@ class ServerUtil():
     memory_used = 0.0
     memory_percent = 0.0
     # Hard drive space
+    storage_raw_free = None
+    storage_raw_percent = None
     storage_transcode_free = None
     storage_transcode_percent = None
     storage_completed_free = None
@@ -103,6 +105,8 @@ class ServerUtil():
         self.get_cpu_util()
         self.get_cpu_temp()
         self.get_memory()
+        self.storage_raw_free, self.storage_raw_percent = \
+            self.get_disk_space(cfg.arm_config['RAW_PATH'])
         self.storage_transcode_free, self.storage_transcode_percent = \
             self.get_disk_space(cfg.arm_config['TRANSCODE_PATH'])
         self.storage_completed_free, self.storage_completed_percent = \

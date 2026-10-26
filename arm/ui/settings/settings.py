@@ -108,6 +108,7 @@ def settings():
     # Get system details from Server Info and Config
     server = SystemInfo.query.filter_by(id="1").first()
     serverutil = ServerUtil()
+    raw_path = cfg.arm_config['RAW_PATH']
     arm_path = cfg.arm_config['TRANSCODE_PATH']
     media_path = cfg.arm_config['COMPLETED_PATH']
 
@@ -135,6 +136,7 @@ def settings():
                            abcde_cfg=cfg.abcde_config,
                            server=server,
                            serverutil=serverutil,
+                           raw_path=raw_path,
                            arm_path=arm_path,
                            media_path=media_path,
                            drives=drives,
