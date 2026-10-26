@@ -18,6 +18,7 @@ They include
   - All of the logging level settings and directory
   - The ARM web-server ip and port
   - Emby notification/server details (allowing emby refresh after rips)
+  - Radarr, Sonarr and Lidarr details (allowing them to import rips, see [Importing rips into Radarr, Sonarr and Lidarr](Config-Radarr-Sonarr-Lidarr))
   - Notification settings (Pushbullet, IFTTT, Pushover)
   - The location of your [apprise.yaml](https://github.com/automatic-ripping-machine/automatic-ripping-machine/wiki/apprise.yaml) (allows notifications to Discord, Slack, Telegram, Kodi, and lots of others)
 
