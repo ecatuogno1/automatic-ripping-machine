@@ -12,7 +12,7 @@ from pathlib import Path
 if find_spec("arm") is None:
     sys.path.append(str(Path(__file__).parents[2]))
 
-from arm.ripper import utils, makemkv, handbrake, ffmpeg  # noqa E402
+from arm.ripper import utils, makemkv, handbrake, ffmpeg, arr  # noqa E402
 from arm.ui import app, db, constants  # noqa E402
 from arm.models.job import JobState  # noqa E402
 
@@ -97,6 +97,8 @@ def rip_visual_media(have_dupes, job, logfile, protection):
     utils.set_permissions(final_directory)
     # If set in the arm.yaml remove the raw files
     utils.delete_raw_files([transcode_in_path, transcode_out_path, makemkv_out_path])
+    # Ask Radarr/Sonarr to import the finished folder if arm.yaml configures it
+    arr.import_job(job)
     # report errors if any
     notify_exit(job)
     logging.info("************* ARM processing complete *************")
