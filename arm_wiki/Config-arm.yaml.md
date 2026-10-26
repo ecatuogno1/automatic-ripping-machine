@@ -9,6 +9,8 @@ However for clarity they are listed here.
 They include 
 
   - UDF disc check
+  - A time limit for disc identification commands (`IDENTIFY_TIMEOUT_SECONDS`, off by default). Set it (e.g. to 120) if
+    damaged DVDs keep `lsdvd` busy for minutes before a rip starts
   - Contacting [OMdb](http://www.omdbapi.com/)/auto identify movies or series
   - HandBrake Settings (profile, arguments, and file extention)
   - MakeMKV settings (rip method, arguments)

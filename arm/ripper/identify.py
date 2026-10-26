@@ -30,12 +30,23 @@ def find_mount(devpath: str) -> str | None:
 
     :return: Absolute path of mountpoint as ``str`` if any, else ``None``
     """
-    if output := arm_subprocess(["findmnt", "--json", devpath]):
+    # findmnt exits 1 when nothing is mounted, which is normal before ARM mounts the disc
+    if output := arm_subprocess(["findmnt", "--json", devpath], expected_returncodes=(1,),
+                                timeout=identify_timeout()):
         mountpoints = json.loads(output)
         for mountpoint in mountpoints["filesystems"]:
             if os.access(mountpoint["target"], os.R_OK):
                 return mountpoint["target"]
     return None
+
+
+def identify_timeout():
+    """IDENTIFY_TIMEOUT_SECONDS from arm.yaml as seconds, or ``None`` (no limit) when it is 0 or unset"""
+    try:
+        seconds = int(cfg.arm_config.get("IDENTIFY_TIMEOUT_SECONDS", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds > 0 else None
 
 
 def check_mount(job: Job) -> bool:
@@ -49,7 +60,7 @@ def check_mount(job: Job) -> bool:
         job.mountpoint = mountpoint
     else:
         logging.info(f"Trying to mount disc at {job.devpath}...")
-        arm_subprocess(["mount", "--source", job.devpath])
+        arm_subprocess(["mount", "--source", job.devpath], timeout=identify_timeout())
         if mountpoint := find_mount(job.devpath):
             logging.info(f"Successfully mounted disc to {mountpoint}")
             job.mountpoint = mountpoint
@@ -91,7 +102,7 @@ def identify(job):
                          f"disctype: {job.disctype}")
             logging.debug(f"identify.job.end ---- \n\r{job.pretty_table()}")
     # No need to warn if we cant unmount
-    arm_subprocess(["umount", job.devpath])
+    arm_subprocess(["umount", job.devpath], failure_level=logging.DEBUG, timeout=identify_timeout())
 
 
 def identify_bluray(job):
@@ -254,8 +265,10 @@ def identify_dvd(job):
         job.year = None
 
     # Track 99 detection
-    # -Oy means output a python dict
-    output = arm_subprocess(["lsdvd", "-Oy", job.devpath])
+    # -Oy means output a python dict. A damaged disc can keep lsdvd retrying unreadable
+    # sectors for minutes or crash it; identification continues without the title list.
+    output = arm_subprocess(["lsdvd", "-Oy", job.devpath], timeout=identify_timeout(),
+                            failure_level=logging.WARNING)
     if output:
         try:
             # literal_eval only accepts literals so we have to adjust the output slightly
