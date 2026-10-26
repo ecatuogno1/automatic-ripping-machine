@@ -46,7 +46,8 @@ If running as a root user remove the sudo calls.
 5. Choose to enter a password for the arm user or accept the default. If you choose to enter a password, 
 enter the password twice as prompted.
 6. Navigate to your A.R.M. installation by navigating to the machine’s IP address, port 8080. `http://{MachineIP}:8080/` 
-The default User is “`admin`”, and the default password is “`password`”
+The User is “`admin`”. Its password is random, created on the first start and printed once to the ARM UI's log:
+`sudo journalctl -u armui | grep -A3 'ARM first run'`. Change it after signing in.
 
 ### Script Options
 The script may be called with these options;

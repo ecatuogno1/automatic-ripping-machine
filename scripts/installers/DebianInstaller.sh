@@ -983,7 +983,8 @@ function LaunchSetup() {
       curl "http://${site_addr}/setup" -o /dev/null -s
       echo -e "${GREEN} Installation Complete
       Please click this link below to access your new Automatic Ripping Machine installation!
-      http://${site_addr}${NC}\n"
+      http://${site_addr}
+      Sign in as 'admin' with the one-time password from: journalctl -u armui | grep -A3 'ARM first run'${NC}\n"
   fi
 
 }

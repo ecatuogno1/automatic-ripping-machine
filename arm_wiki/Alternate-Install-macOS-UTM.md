@@ -199,11 +199,12 @@ Open your browser and navigate to:
 http://<VM_IP_ADDRESS>:8080
 ```
 
-**Default credentials:**
+**Credentials:**
 - Username: `admin`
-- Password: `password`
+- Password: random, printed once to the container log on the first start:
+  `docker logs arm 2>&1 | grep -A3 'ARM first run'`
 
-> **Change the default password immediately** in Settings.
+> **Change this password** after signing in (Change admin password).
 
 ---
 
@@ -285,5 +286,5 @@ cd ~/arm && docker compose down
 | Guest OS | Ubuntu Server 24.04 |
 | Container | `automaticrippingmachine/automatic-ripping-machine` |
 | Web Interface | `http://VM_IP:8080` |
-| Default Login | admin / password |
+| Login | admin / random password from `docker logs arm` on the first start |
 | DVD Device | /dev/sr0 |
