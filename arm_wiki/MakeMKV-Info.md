@@ -29,6 +29,16 @@ Two specific settings that may be particularly useful to create or copy are the 
 > * While the `dvd_MinimumTitleLength` (corresponding to the GUIs Preferences > Video > "Minimum title length (seconds)" setting) is harmless to create, it has no effect as it is overriden by A.R.M.'s `MINLENGTH` setting.
 > * The `app_Key` should be left untouched. If you have a permanent key see [MakeMKV Licence](#makemkv-licence) above.
 
+### Several drives: `MAKEMKV_NOSCAN`
+By default `makemkvcon` opens every optical drive when it starts, even when A.R.M. tells it to read one drive
+(`dev:/dev/srN`, used by the "mkv" rip method and the track scan before it). With several drives, a drive that is busy
+with another job or slow to respond can then delay or break this job's MakeMKV run, and errors from the other drive can
+show up in this job's log.
+
+Set `MAKEMKV_NOSCAN: true` (in "Arm Settings" > "Ripper Settings", or in `arm.yaml`) to pass MakeMKV's `--noscan` option
+for those runs, so it only opens the drive being ripped. The Blu-ray "backup" method addresses the disc by MakeMKV's own
+disc number, which needs the full drive listing, so it is not affected.
+
 ### Profiles
 MakeMKV can also use the concept of profiles to decide which audio tracks and which subtitle tracks to include in the 
 *.mkv files. The defaults are usually sufficient. However, A.R.M. allows you to change these defaults if needed.  This is 

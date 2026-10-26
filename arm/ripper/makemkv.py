@@ -1237,6 +1237,19 @@ class MakeMKVOutputChecker:
         return self.data
 
 
+def device_options(options):
+    """
+    makemkvcon options, with --noscan added when a dev: source is read and MAKEMKV_NOSCAN is on
+
+    Without --noscan makemkvcon opens every optical drive at startup, including drives busy with other jobs.
+    """
+    options = list(options)
+    if (cfg.arm_config.get("MAKEMKV_NOSCAN", False) and options and "--noscan" not in options
+            and any(str(option).startswith("dev:") for option in options)):
+        options.insert(1, "--noscan")
+    return options
+
+
 def run(options, select):
     """
     Run makemkv with input cli options and yield selected messages
@@ -1261,7 +1274,7 @@ def run(options, select):
         "--robot",
         "--messages=-stdout",
     ]
-    cmd += list(options)
+    cmd += device_options(options)
     buffer = []
     logging.debug(f"command: '{' '.join(cmd)}'")
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True) as proc:

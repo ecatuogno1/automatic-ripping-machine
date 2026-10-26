@@ -217,6 +217,12 @@ RIPMETHOD_BR: "PLACEHOLDER"
 # MKV_ARGS: "--debug=-stdout"  # this will enable more detailed logging
 MKV_ARGS: ""
 
+# When MakeMKV reads a drive by its device path (dev:/dev/srN, the "mkv" method and its track scan), pass --noscan
+# so makemkvcon doesn't open every other optical drive at startup. Useful with several drives: a drive that is busy
+# with another job, or slow to answer, can otherwise delay or fail this job's MakeMKV run.
+# The Blu-ray backup method addresses the disc by MakeMKV's disc index and still scans every drive.
+MAKEMKV_NOSCAN: false
+
 # Remove any files created in the raw and transcode paths for the job after processing is complete
 DELRAWFILES: true
 
