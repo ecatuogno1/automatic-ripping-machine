@@ -748,12 +748,15 @@ def check_ip():
 def clean_for_filename(string):
     """ Cleans up string for use in filename """
     string = re.sub('\\[(.*?)]', '', string)
-    string = re.sub('\\s+', '-', string)
+    # Words are joined with dashes ("The-Matrix") unless TITLE_SPACES is set ("The Matrix")
+    keep_spaces = cfg.arm_config.get("TITLE_SPACES", False)
+    string = re.sub('\\s+', ' ' if keep_spaces else '-', string)
     string = string.replace(' : ', ' - ')
     string = string.replace(':', '-')
     string = string.replace('&', 'and')
     string = string.replace("\\", " - ")
-    string = string.replace(" ", " - ")
+    if not keep_spaces:
+        string = string.replace(" ", " - ")
     string = string.strip()
     return re.sub('[^\\w.() -]', '', string)
 

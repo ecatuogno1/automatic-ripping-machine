@@ -352,6 +352,9 @@ def metadata_selector(job, title=None, year=None):
     if title is None or str(title).strip().lower() in ("", "not identified"):
         logging.info(f"Not searching for placeholder title: {title!r}")
         return None
+    # Labels and cleaned titles join words with "_", "-" or "+" (THE_MATRIX, The-Batman);
+    # the providers match "The Batman" but often not "The-Batman"
+    title = re.sub(r"[_+-]+", " ", str(title)).strip()
     search_results = None
     if cfg.arm_config['METADATA_PROVIDER'].lower() == "tmdb":
         logging.debug("provider tmdb")
