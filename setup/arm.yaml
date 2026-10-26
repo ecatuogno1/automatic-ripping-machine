@@ -344,6 +344,11 @@ ARR_IMPORT_MODE: "Move"
 # "/home/arm/media/completed=/data/completed;/home/arm/music=/data/music"
 ARR_PATH_MAP: ""
 
+# Also identify discs with the Radarr/Sonarr lookup when OMDb/TMDB find nothing (true/false).
+# Uses RADARR_URL/RADARR_API_KEY and SONARR_URL/SONARR_API_KEY above, and only accepts a title
+# that matches the disc's title exactly.
+ARR_IDENTIFY: false
+
 
 #############################
 ## Notification Parameters ##
