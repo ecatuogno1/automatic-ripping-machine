@@ -63,11 +63,13 @@ def test_backup_uses_the_disc_index_listed_for_the_jobs_device(commands, tmp_pat
     assert "disc:1" in backup[0]
 
 
-def test_backup_uses_the_stored_disc_index(commands, tmp_path):
-    makemkv.makemkv(_job(tmp_path, "bluray", "backup", drive=SimpleNamespace(mdisc=4)))
-    assert not any("disc:9999" in cmd for cmd in commands)
+def test_backup_looks_up_the_disc_index_again_instead_of_a_stored_one(commands, tmp_path):
+    # The index stored by an earlier run (4) no longer names this drive; MakeMKV now lists it as 1
+    drive = SimpleNamespace(mdisc=4)
+    makemkv.makemkv(_job(tmp_path, "bluray", "backup", drive=drive))
+    assert any("disc:9999" in cmd for cmd in commands)
     backup = [cmd for cmd in commands if cmd[0] == "backup"]
-    assert "disc:4" in backup[0]
+    assert "disc:1" in backup[0]
 
 
 def test_backup_stops_when_makemkv_does_not_list_the_device(commands, tmp_path):

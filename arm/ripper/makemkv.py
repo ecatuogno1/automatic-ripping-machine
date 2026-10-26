@@ -719,7 +719,10 @@ def uses_disc_index(job):
 
 def makemkv_disc_index(job):
     """
-    MakeMKV disc index of the job's drive, from the database or from a scan of every drive
+    MakeMKV disc index of the job's drive, looked up now by scanning every drive
+
+    MakeMKV numbers the drives each time it starts, so an index stored by an earlier
+    run can name another drive once drives were added, removed or re-enumerated.
 
     Parameters:
         job: arm.models.job.Job
@@ -728,8 +731,6 @@ def makemkv_disc_index(job):
     Raises:
         RipperException when MakeMKV does not list a drive at the job's device
     """
-    if job.drive is not None and job.drive.mdisc is not None:
-        return job.drive.mdisc
     logging.debug("Storing new MakeMKV disc numbers to database.")
     disc_index = None
     with db.session.no_autoflush:
