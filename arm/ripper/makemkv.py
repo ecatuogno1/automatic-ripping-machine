@@ -478,6 +478,10 @@ class MakeMkvRuntimeError(RuntimeError):
         if stderr is not None:
             logging.debug(f"MakeMKV stderr: {stderr}")
         self.message = f"Call to MakeMKV failed with code: {returncode}"
+        reason = str(output).strip().splitlines() if output else []
+        if reason:
+            # MakeMKV's last message is usually the reason, e.g. "Failed to open disc"
+            self.message += f": {reason[-1][:500]}"
         logging.error(self.message)
         super().__init__(self.message)
 
@@ -1241,7 +1245,8 @@ def run(options, select):
         "--messages=-stdout",
     ]
     cmd += list(options)
-    buffer = []
+    # error context for a non-zero exit: unparsed lines and MakeMKV's own messages (bounded)
+    buffer = collections.deque(maxlen=200)
     logging.debug(f"command: '{' '.join(cmd)}'")
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True) as proc:
         logging.debug(f"PID {proc.pid}: command: '{' '.join(cmd)}'")
@@ -1258,6 +1263,8 @@ def run(options, select):
                 buffer.append(line)
                 continue
             logging.debug(data)
+            if isinstance(data, MakeMKVMessage):
+                buffer.append(data.message)
             if msg_type in select:
                 yield data
     if proc.returncode:
