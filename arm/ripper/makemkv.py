@@ -665,8 +665,9 @@ def makemkv_mkv(job, rawpath):
     # Get drive mode for the current drive
     mode = utils.get_drive_mode(job.devpath)
     logging.info(f"Job running in {mode} mode")
-    # Get track info form mkv rip
-    get_track_info(job.drive.mdisc, job)
+    # Get track info form mkv rip, unless scan_tracks() already listed them (manual mode)
+    if job.tracks.filter_by(source=SOURCE).count() == 0:
+        get_track_info(job.drive.mdisc, job)
     # route to ripping functions.
     if job.config.MAINFEATURE:
         logging.info("Trying to find mainfeature (sorting by chapters desc, filesize desc, track_number asc)")
@@ -723,6 +724,30 @@ def makemkv(job):
     prep_mkv()
     logging.info(f"Starting MakeMKV rip. Method is {job.config.RIPMETHOD}")
     # get MakeMKV disc number
+    set_disc_index(job)
+    # get filesystem in order
+    rawpath = setup_rawpath(job, os.path.join(str(job.config.RAW_PATH), str(job.title)))
+    logging.info(f"Processing files to: {rawpath}")
+    # Rip BluRay
+    if (job.config.RIPMETHOD in ("backup", "backup_dvd")) and job.disctype == "bluray":
+        makemkv_backup(job, rawpath)
+    # Rip BluRay or DVD
+    elif job.config.RIPMETHOD == "mkv" or job.disctype == "dvd":
+        makemkv_mkv(job, rawpath)
+    else:
+        logging.info("I'm confused what to do....  Passing on MakeMKV")
+    job.eject()
+    logging.info(f"Exiting MakeMKV processing with return value of: {rawpath}")
+    return rawpath
+
+
+def set_disc_index(job):
+    """
+    Make sure the job's drive knows its MakeMKV disc number
+
+    Parameters:
+        job: arm.models.job.Job
+    """
     # Fix: Check if job.drive is None before accessing job.drive.mdisc
     if job.drive is None or job.drive.mdisc is None:
         logging.debug("Storing new MakeMKV disc numbers to database.")
@@ -746,20 +771,21 @@ def makemkv(job):
                 logging.error(f"Could not find drive for {job.devpath}")
                 raise ValueError(f"No drive found for device {job.devpath}")
     logging.info(f"MakeMKV disc number: {job.drive.mdisc:d}")
-    # get filesystem in order
-    rawpath = setup_rawpath(job, os.path.join(str(job.config.RAW_PATH), str(job.title)))
-    logging.info(f"Processing files to: {rawpath}")
-    # Rip BluRay
-    if (job.config.RIPMETHOD in ("backup", "backup_dvd")) and job.disctype == "bluray":
-        makemkv_backup(job, rawpath)
-    # Rip BluRay or DVD
-    elif job.config.RIPMETHOD == "mkv" or job.disctype == "dvd":
-        makemkv_mkv(job, rawpath)
-    else:
-        logging.info("I'm confused what to do....  Passing on MakeMKV")
-    job.eject()
-    logging.info(f"Exiting MakeMKV processing with return value of: {rawpath}")
-    return rawpath
+
+
+def scan_tracks(job):
+    """
+    List the disc's titles in the Tracks table ahead of the rip
+
+    In manual drive mode this lets the titles be chosen while ARM waits (MANUAL_WAIT);
+    makemkv_mkv() then uses them instead of scanning the disc again.
+
+    Parameters:
+        job: arm.models.job.Job
+    """
+    prep_mkv()
+    set_disc_index(job)
+    get_track_info(job.drive.mdisc, job)
 
 
 def rip_mainfeature(job, track, rawpath):
