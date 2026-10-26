@@ -13,6 +13,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from arm.ripper import music_brainz
 from arm.ui import db
 import arm.config.config as cfg
+from arm.models.config import redact
 
 # THESE IMPORTS ARE REQUIRED FOR THE db.Relationships to work
 from arm.models.track import Track  # noqa: F401
@@ -277,7 +278,7 @@ class Job(db.Model):
             if attr == "config":
                 pretty_table.add_row([str(attr), str(value.pretty_table())])
             else:
-                pretty_table.add_row([str(attr), str(value)])
+                pretty_table.add_row([str(attr), str(redact(attr, value))])
         return str(pretty_table.get_string())
 
     def get_d(self):
@@ -288,7 +289,7 @@ class Job(db.Model):
         return_dict = {}
         for key, value in self.__dict__.items():
             if '_sa_instance_state' not in key:
-                return_dict[str(key)] = str(value)
+                return_dict[str(key)] = str(redact(key, value))
         return return_dict
 
     def eject(self):

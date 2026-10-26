@@ -1,13 +1,38 @@
+import re
+
 from prettytable import PrettyTable
 
 from arm.ui import db
 
 
+# Legacy names that are secret without a telling word (EMBY_USERID), kept beside the pattern below.
 hidden_attribs = ("OMDB_API_KEY", "EMBY_USERID", "EMBY_PASSWORD",
                   "EMBY_API_KEY", "PB_KEY", "IFTTT_KEY", "PO_KEY",
                   "PO_USER_KEY", "PO_APP_KEY", "ARM_API_KEY",
                   "TMDB_API_KEY", "_sa_instance_state")
 HIDDEN_VALUE = "<hidden>"
+# A setting is secret when a word of its name says so (MAKEMKV_PERMA_KEY, TMDB_API_KEY, a future PLEX_TOKEN,
+# ...). Whole words only: HASHEDKEYS is a flag, not a key.
+SECRET_WORDS = frozenset({"KEY", "KEYS", "APIKEY", "TOKEN", "TOKENS", "SECRET", "SECRETS", "PASSWORD",
+                          "PASSWORDS", "PASSWD", "PASS", "CREDENTIAL", "CREDENTIALS", "AUTH", "APPRISE",
+                          "WEBHOOK", "WEBHOOKS"})
+# user:password@ or token@ in any URL (e.g. EMBY_SERVER or JSON_URL)
+URL_CREDENTIALS = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://)[^/\s@]+@")
+
+
+def secret_name(name):
+    """True for a config key whose value must never reach a log, page or API answer."""
+    name = str(name).upper()
+    return name in hidden_attribs or any(word in SECRET_WORDS for word in re.split(r"[^A-Z0-9]+", name))
+
+
+def redact(name, value):
+    """``value`` as it may be shown: a secret setting hidden, credentials in a URL removed."""
+    if value and secret_name(name):
+        return HIDDEN_VALUE
+    if isinstance(value, str) and "://" in value:
+        return URL_CREDENTIALS.sub(r"\1" + HIDDEN_VALUE + "@", value)
+    return value
 
 
 class Config(db.Model):
@@ -83,8 +108,7 @@ class Config(db.Model):
         """Returns a string of the object"""
         return_string = self.__class__.__name__ + ": "
         for attr, value in self.__dict__.items():
-            if str(attr) in hidden_attribs and value:
-                value = HIDDEN_VALUE
+            value = redact(attr, value)
             return_string = return_string + "(" + str(attr) + "=" + str(value) + ") "
 
         return return_string
@@ -95,8 +119,7 @@ class Config(db.Model):
         for attr, value in self.__dict__.items():
             if return_string:
                 return_string = return_string + "\n"
-            if str(attr) in hidden_attribs and value:
-                value = HIDDEN_VALUE
+            value = redact(attr, value)
             return_string = return_string + str(attr) + ":" + str(value)
 
         return return_string
@@ -107,9 +130,7 @@ class Config(db.Model):
         pretty_table.field_names = ["Config", "Value"]
         pretty_table._max_width = {"Config": 20, "Value": 30}
         for attr, value in self.__dict__.items():
-            if str(attr) in hidden_attribs and value:
-                value = HIDDEN_VALUE
-            pretty_table.add_row([str(attr), str(value)])
+            pretty_table.add_row([str(attr), str(redact(attr, value))])
         return str(pretty_table.get_string())
 
     def get_d(self):
@@ -119,6 +140,6 @@ class Config(db.Model):
         """
         return_dict = {}
         for key, value in self.__dict__.items():
-            if str(key) not in hidden_attribs:
-                return_dict[str(key)] = str(value)
+            if not secret_name(key):
+                return_dict[str(key)] = str(redact(key, value))
         return return_dict
