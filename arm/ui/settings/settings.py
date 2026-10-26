@@ -205,7 +205,8 @@ def save_settings():
             # arm.yaml is read-only
             app.logger.error(f"{cfg.arm_config_path} is read-only", exc_info=e)
 
-    return {'success': success, 'settings': cfg.arm_config, 'form': 'arm ripper settings'}
+    # Don't echo the settings back: arm.yaml holds API keys and the page logs this response to the console
+    return {'success': success, 'form': 'arm ripper settings'}
 
 
 @route_settings.route('/save_ui_settings', methods=['POST'])
@@ -295,7 +296,8 @@ def save_apprise_cfg():
         except OSError as e:
             app.logger.error(f"{cfg.apprise_config_path} is read-only", exc_info=e)
     # If we get to here there was no post data
-    return {'success': success, 'settings': cfg.apprise_config, 'form': 'Apprise config'}
+    # Don't echo the settings back: apprise.yaml holds notification service tokens
+    return {'success': success, 'form': 'Apprise config'}
 
 
 @route_settings.route('/systeminfo', methods=['POST'])
