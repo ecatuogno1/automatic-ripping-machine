@@ -38,12 +38,20 @@
                     <div class="col-md-3 text-center">
                         <div class="card text-center">
                             <div class="card-header">
+                                {% if res["imdbID"] %}
                                 <a href="gettitle?imdbID={{ res["imdbID"] }}&job_id={{ job_id }}">
+                                {% else %}
+                                {# TMDB has no IMDb id for some titles; the details page needs one, so save directly #}
+                                <a href="{{ url_for('route_jobs.updatetitle', title=res['Title'], year=res['Year'],
+                                                    type=res['Type'], poster=res['Poster'], job_id=job_id) }}"
+                                   title="No IMDb id: selecting this saves the title directly">
+                                {% endif %}
                                   <img src="{{ res["Poster"] }}" width="120px" class="img-thumbnail" alt="Poster image">
                                 </a>
                             </div>
                             <div class="card-body"><strong>{{ res["Title"] }}</strong> - {{ res["Type"].capitalize() }}
                                 ({{ res["Year"] }})
+                                {% if not res["imdbID"] %}<br><small class="text-muted">No IMDb id</small>{% endif %}
                             </div>
                         </div>
                     </div>
