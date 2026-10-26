@@ -285,7 +285,11 @@ def get_video_details(job):
     if title == "not identified" or title is None or title == "":
         logging.info("Disc couldn't be identified")
         return
-    title = re.sub('[_ ]', "+", title.strip())
+    # Labels of TV box sets carry season/disc markers (Person_of_Interest_S2_D2,
+    # Avatar_Book_1_Disc_2) that are not part of the show's name
+    search_title = strip_set_markers(title)
+    box_set = search_title != title
+    title = re.sub('[_ ]', "+", search_title.strip())
 
     # strip all non-numeric chars and use that for year
     if job.year is None:
@@ -297,9 +301,23 @@ def get_video_details(job):
     logging.debug(f"Calling webservice with title: {title} and year: {year}")
 
     try:
-        identify_loop(job, None, title, year)
+        identify_loop(job, None, title, year, box_set)
     except Exception as error:
         logging.info(f"Identification failed with the error: {error}. Continuing...")
+
+
+# Season/disc/book markers on box-set labels: S2, S2_D2, D2, Season 3, Book 1, Disc 2.
+# Everything from the first marker to the end of the title is dropped.
+SET_MARKERS = re.compile(
+    r"[\s_+.-]+(?:S\d{1,2}(?:[\s_+.-]*D\d{1,2})?|D\d{1,2}|(?:SEASON|BOOK|DIS[CK])[\s_+.-]*"
+    r"(?:\d{1,2}|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN))(?=$|[\s_+.-]).*$",
+    re.IGNORECASE,
+)
+
+
+def strip_set_markers(title):
+    """Remove season/disc/book markers (and what follows them) from a disc title."""
+    return SET_MARKERS.sub("", str(title))
 
 
 def update_job(job, search_results):
@@ -369,40 +387,60 @@ def metadata_selector(job, title=None, year=None):
     return search_results
 
 
-def identify_loop(job, response, title, year):
+def identify_loop(job, response, title, year, box_set=False):
     """
+    Search for ``title``, dropping words off the end until something matches
 
     :param job:
     :param response:
     :param title:
     :param year:
+    :param box_set: the title came from a TV box-set label. Its year is the year the set was
+        pressed, not the year the show started, so the search tries without the year first,
+        and it never searches for a single word, which only finds unrelated titles.
     """
     # handle failures
     # this is a little kludgy, but it kind of works...
     logging.debug(f"Response = {response}")
     if response is None:
-        # try with year first
-        response = try_with_year(job, response, title, year)
-        # try submitting without the year
-        response = try_without_year(job, response, title)
+        if box_set:
+            response = try_without_year(job, response, title)
+            response = try_with_year(job, response, title, year)
+        else:
+            # try with year first
+            response = try_with_year(job, response, title, year)
+            # try submitting without the year
+            response = try_without_year(job, response, title)
 
+        min_words = 2 if box_set else 1
         if response is None:
-            while response is None and title.find("-") > 0:
-                title = title.rsplit('-', 1)[0]
-                logging.debug(f"Trying title: {title}")
-                response = metadata_selector(job, title, year)
-                logging.debug(f"response: {response}")
+            response, title = slice_title(job, title, year, "-", min_words, box_set)
+        # if still fail, then try slicing off the last word in a loop
+        if response is None:
+            slice_title(job, title, year, "+", min_words, box_set)
 
-            # if still fail, then try slicing off the last word in a loop
-            while response is None and title.count('+') > 0:
-                title = title.rsplit('+', 1)[0]
-                logging.debug(f"Trying title: {title}")
-                response = metadata_selector(job, title, year)
-                logging.debug(f"response: {response}")
-                if response is None:
-                    # Still failing - try the words we have without year
-                    logging.debug("Removing year...")
-                    response = metadata_selector(job, title)
+
+def slice_title(job, title, year, separator, min_words, year_last):
+    """
+    Drop the last ``separator``-delimited word of ``title`` until a search matches,
+    trying each shorter title with and without the year
+
+    :return: the search response (or None) and the title that was tried last
+    """
+    response = None
+    while response is None and title.find(separator) > 0 and title.count(separator) >= min_words:
+        title = title.rsplit(separator, 1)[0]
+        logging.debug(f"Trying title: {title}")
+        if year_last:
+            response = metadata_selector(job, title)
+        if response is None and year:
+            response = metadata_selector(job, title, year)
+        logging.debug(f"response: {response}")
+        if response is None and not year_last:
+            # Still failing - try the words we have without year
+            logging.debug("Removing year...")
+            response = metadata_selector(job, title)
+    return response, title
 
 
 def try_without_year(job, response, title):
