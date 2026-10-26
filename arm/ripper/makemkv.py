@@ -858,32 +858,50 @@ def process_single_tracks(job, rawpath, mode: str):
 
 def setup_rawpath(job, raw_path):
     """
-    Checks if we need to create path and does so if needed\n\n
+    Create a new, empty raw folder for this job and return its path.
+
+    A folder that already exists (an earlier rip of the same title, or another drive's job
+    that is ripping a disc with the same title right now) is never shared: the name then
+    gets the job stage (``Title_<stage>``).
 
     Parameters:
         job: arm.models.job.Job
         raw_path
     Returns:
         str: modified path
+    Raises:
+        OSError: the folder could not be created
     """
 
     logging.info(f"Destination is {raw_path}")
-    if not os.path.exists(raw_path):
-        try:
-            os.makedirs(raw_path)
-        except OSError:
-            err = f"Couldn't create the base file path: {raw_path}. Probably a permissions error"
-            logging.error(err)
-    else:
-        logging.info(f"{raw_path} exists.  Adding timestamp.")
-        raw_path = utils.contained_path(str(job.config.RAW_PATH), f"{job.title}_{job.stage}")
-        logging.info(f"raw_path is {raw_path}")
-        try:
-            os.makedirs(raw_path)
-        except OSError:
-            err = f"Couldn't create the base file path: {raw_path}. Probably a permissions error"
-            raise OSError(err) from OSError
+    if _create_new_folder(raw_path):
+        return raw_path
+    logging.info(f"{raw_path} exists.  Adding timestamp.")
+    raw_path = utils.contained_path(str(job.config.RAW_PATH), f"{job.title}_{job.stage}")
+    logging.info(f"raw_path is {raw_path}")
+    if not _create_new_folder(raw_path):
+        raise OSError(f"Couldn't create the base file path: {raw_path}. It already exists")
     return raw_path
+
+
+def _create_new_folder(path):
+    """
+    Create path, failing if it already exists (exclusive, so two jobs never share a folder)
+
+    Returns:
+        bool: True if the folder was created, False if it already existed
+    Raises:
+        OSError: the folder could not be created for another reason (e.g. permissions)
+    """
+    try:
+        os.makedirs(path)
+    except FileExistsError:
+        return False
+    except OSError as error:
+        err = f"Couldn't create the base file path: {path}. Probably a permissions error"
+        logging.error(err)
+        raise OSError(err) from error
+    return True
 
 
 def prep_mkv():
