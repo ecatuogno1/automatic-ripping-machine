@@ -8,13 +8,14 @@ import subprocess
 from typing import Optional, List, Union
 
 
-def arm_subprocess(cmd: Union[str, List[str]], shell=False, check=False) -> Optional[str]:
+def arm_subprocess(cmd: Union[str, List[str]], shell=False, check=False, env=None) -> Optional[str]:
     """
     Spawn blocking subprocess
 
     :param cmd: Command to run
     :param shell: Run ``cmd`` in a shell
     :param check: Raise ``CalledProcessError`` if ``cmd`` returns non-zero exit code
+    :param env: Environment for ``cmd`` (default: inherit ARM's environment)
 
     :return: Output (both stdout and stderr) of ``cmd``, or ``None`` if it returned a non-zero exit code
 
@@ -27,7 +28,8 @@ def arm_subprocess(cmd: Union[str, List[str]], shell=False, check=False) -> Opti
             cmd,
             shell=shell,
             stderr=subprocess.STDOUT,
-            encoding="utf-8"
+            encoding="utf-8",
+            env=env,
         )
     except (subprocess.CalledProcessError, OSError) as error:
         decoded_output: Optional[str] = None
