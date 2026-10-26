@@ -283,3 +283,5 @@ if __name__ == "__main__":
             else:
                 job.job_length = "0:00:00"
             db.session.commit()
+            # Tell JOB_WEBHOOK_URL (if set) the job has finished
+            utils.job_webhook(job)

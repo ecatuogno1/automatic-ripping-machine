@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Collection of utility functions"""
 import datetime
+import enum
 import os
 import logging
 import subprocess
@@ -11,6 +12,7 @@ import re
 from logging import Logger
 from pathlib import Path, PurePath
 from math import ceil
+from urllib.parse import urlsplit
 
 import bcrypt
 import requests
@@ -58,7 +60,7 @@ def notify(job, title: str, body: str):
     notification = Notifications(title, body)
     database_adder(notification)
 
-    bash_notify(cfg.arm_config, title, body)
+    bash_notify(cfg.arm_config, title, body, job)
 
     # Sent to remote sites
     # Create an Apprise instance
@@ -85,10 +87,99 @@ def notify(job, title: str, body: str):
             logging.error(f"Failed sending apprise notifications. {error}")
 
 
-def bash_notify(cfg, title, body):
+def bash_notify(cfg, title, body, job=None):
     # bash notifications use subprocess instead of apprise.
+    # The arguments stay title and body; the job's details are passed as ARM_* environment variables.
     if cfg['BASH_SCRIPT'] != "":
-        arm_subprocess(["/usr/bin/env", "bash", cfg['BASH_SCRIPT'], title, body])
+        env = {**os.environ, **job_environment(job)}
+        arm_subprocess(["/usr/bin/env", "bash", cfg['BASH_SCRIPT'], title, body], env=env)
+
+
+# Job details passed to BASH_SCRIPT as environment variables: variable name -> Job attribute
+JOB_ENVIRONMENT = {
+    "ARM_JOB_ID": "job_id",
+    "ARM_TITLE": "title",
+    "ARM_YEAR": "year",
+    "ARM_VIDEO_TYPE": "video_type",
+    "ARM_IMDB_ID": "imdb_id",
+    "ARM_DISCTYPE": "disctype",
+    "ARM_LABEL": "label",
+    "ARM_OUTPUT_PATH": "path",
+    "ARM_STATUS": "status",
+}
+
+
+def _json_value(value):
+    """A database value as plain JSON: enums by their value, dates as ISO 8601"""
+    if isinstance(value, enum.Enum):
+        return value.value
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        return value.isoformat()
+    return value
+
+
+def job_environment(job):
+    """
+    ARM_* environment variables describing the job for BASH_SCRIPT\n
+    :param job: Current job, or None for messages without a job
+    :return: dict of variable name to string value ("" when unknown); empty without a job
+    """
+    if job is None:
+        return {}
+    environment = {}
+    for name, attribute in JOB_ENVIRONMENT.items():
+        value = _json_value(getattr(job, attribute, None))
+        environment[name] = "" if value is None else str(value)
+    return environment
+
+
+# Job columns left out of the webhook payload: process ids are meaningless outside this machine
+WEBHOOK_EXCLUDED_COLUMNS = ("pid", "pid_hash")
+
+
+def job_payload(job):
+    """
+    The job as a JSON-serialisable dict for JOB_WEBHOOK_URL\n
+    Holds the job's own columns and its tracks; never the job's config (it holds API keys and passwords).
+    :param job: Current job
+    :return: dict
+    """
+    payload = {column.name: _json_value(getattr(job, column.name, None)) for column in Job.__table__.columns
+               if column.name not in WEBHOOK_EXCLUDED_COLUMNS}
+    payload["tracks"] = [{column.name: _json_value(getattr(track, column.name, None))
+                          for column in Track.__table__.columns}
+                         for track in job.tracks]
+    return payload
+
+
+def job_webhook(job):
+    """
+    POST the finished job as JSON to JOB_WEBHOOK_URL, if one is set\n
+    Called once per job when it has finished, successfully or not. Failures are logged and never fail the job.
+    :param job: Current job
+    :return: True if the webhook accepted the job, otherwise False
+    """
+    url = str(cfg.arm_config.get("JOB_WEBHOOK_URL") or "").strip()
+    if not url or job is None:
+        return False
+    if urlsplit(url).scheme.lower() not in ("http", "https"):
+        logging.error("JOB_WEBHOOK_URL must be an http(s) URL, not sending the job webhook")
+        return False
+    try:
+        timeout = float(cfg.arm_config.get("JOB_WEBHOOK_TIMEOUT") or 10)
+    except (TypeError, ValueError):
+        timeout = 10
+    success = job.status == JobState.SUCCESS.value
+    body = {"event": "job_completed" if success else "job_failed", "job": job_payload(job)}
+    try:
+        response = requests.post(url, json=body, timeout=timeout)
+        response.raise_for_status()
+    except (requests.exceptions.RequestException, TypeError, ValueError) as error:
+        # Not logging the URL, it may contain credentials
+        logging.error(f"Job webhook failed for job {job.job_id}: {type(error).__name__}")
+        return False
+    logging.info(f"Job webhook sent for job {job.job_id}")
+    return True
 
 
 def notify_entry(job):

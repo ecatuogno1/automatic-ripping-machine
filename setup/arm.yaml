@@ -339,6 +339,9 @@ PO_APP_KEY: ""
 # We will call the script with two arguments:
 # First Argument: Title
 # Second Argument: Body
+# The job's details are also passed as environment variables (empty when not known yet):
+# ARM_JOB_ID, ARM_TITLE, ARM_YEAR, ARM_VIDEO_TYPE, ARM_IMDB_ID, ARM_DISCTYPE, ARM_LABEL,
+# ARM_OUTPUT_PATH and ARM_STATUS (the job's status when the notification was sent)
 BASH_SCRIPT: ""
 
 
@@ -359,6 +362,15 @@ TMDB_API_KEY: ""
 # JSON_URL
 # Url to send Notifications to in JSON format
 JSON_URL: ""
+
+# JOB_WEBHOOK_URL
+# When a job finishes (successfully or not) POST the whole job, its tracks included, as JSON to this URL
+# The body is {"event": "job_completed" or "job_failed", "job": {...}}. The job's config is never sent
+# Leave empty to disable
+JOB_WEBHOOK_URL: ""
+
+# Seconds to wait for JOB_WEBHOOK_URL to answer
+JOB_WEBHOOK_TIMEOUT: 10
 
 
 #################################################
