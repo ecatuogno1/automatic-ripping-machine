@@ -1,4 +1,5 @@
 import enum
+import fcntl
 import logging
 import os
 import psutil
@@ -17,6 +18,35 @@ import arm.config.config as cfg
 # THESE IMPORTS ARE REQUIRED FOR THE db.Relationships to work
 from arm.models.track import Track  # noqa: F401
 from arm.models.config import Config  # noqa: F401
+
+
+# CDROM_DISC_STATUS ioctl and its audio results, from linux/cdrom.h
+CDROM_DISC_STATUS = 0x5327
+CDS_AUDIO = 100
+CDS_MIXED = 105
+
+
+def _kernel_reports_audio(devpath):
+    """Ask the kernel whether the disc in ``devpath`` has audio tracks (CDROM_DISC_STATUS ioctl).
+
+    Used when udev has no ID_CDROM_MEDIA_TRACK_COUNT_AUDIO for a disc that has no filesystem:
+    udev's database may not have been updated for the new disc yet, or may be incomplete
+    inside a container.
+    """
+    try:
+        disc = os.open(devpath, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError as error:
+        logging.debug(f"Could not open {devpath} to read its disc status: {error}")
+        return False
+    try:
+        status = fcntl.ioctl(disc, CDROM_DISC_STATUS)
+    except OSError as error:
+        logging.debug(f"CDROM_DISC_STATUS failed on {devpath}: {error}")
+        return False
+    finally:
+        os.close(disc)
+    logging.debug(f"CDROM_DISC_STATUS for {devpath}: {status}")
+    return status in (CDS_AUDIO, CDS_MIXED)
 
 
 def _disc_dir_exists(mountpoint, name):
@@ -209,6 +239,12 @@ class Job(db.Model):
                 self.disctype = "music"
             else:
                 continue
+
+        # Without udev's audio track count an audio CD stays "unknown": it can't be mounted, so
+        # it never starts (#952). A disc with a filesystem is left to the mount-based checks.
+        if self.disctype == "unknown" and "ID_FS_TYPE" not in device and _kernel_reports_audio(self.devpath):
+            logging.info("udev did not report audio tracks, but the drive reports an audio CD")
+            self.disctype = "music"
 
     def get_pid(self):
         """
