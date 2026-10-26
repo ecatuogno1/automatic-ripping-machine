@@ -100,8 +100,8 @@ def check_fstab():
         logging.warning(f"Could not read /etc/fstab ({error}). Skipping fstab check.")
         return
     for line in lines:
-        # Now grabs the real uncommented fstab entry
-        if re.search("^" + re.escape(job.devpath), line):
+        # Now grabs the real uncommented fstab entry, matching the whole device name (/dev/sr1 is not /dev/sr10)
+        if re.search("^" + re.escape(job.devpath) + r"\s", line):
             logging.info(f"fstab entry is: {line.rstrip()}")
             return
     logging.error("No fstab entry found.  ARM will likely fail.")
