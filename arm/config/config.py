@@ -39,36 +39,13 @@ arm_config = _load_config(os.path.join(cur_cfg["INSTALLPATH"], "setup/arm.yaml")
 arm_config.update(cur_cfg)
 
 try:
-    # Save the dictionary
-    with open(arm_config_path, "w") as settings_file:
-        with open(
-            os.path.join(cur_cfg["INSTALLPATH"], "arm/ui/comments.json"),
-            "r",
-        ) as comments_file:
-            comments = json.load(comments_file)
-
-        arm_cfg = comments["ARM_CFG_GROUPS"]["BEGIN"] + "\n\n"
-        for key, value in dict(arm_config).items():
-            # Add any grouping comments
-            arm_cfg += config_utils.arm_yaml_check_groups(comments, key)
-            # Check for comments for this key in comments.json, add them if they exist
-            try:
-                if comment := comments[str(key)]:
-                    arm_cfg += f"\n{comment}\n"
-            except KeyError:
-                arm_cfg += "\n"
-            # test if key value is an int
-            value = str(value)  # just change the type to keep things as expected
-            try:
-                post_value = int(value)
-                arm_cfg += f"{key}: {post_value}\n"
-            except ValueError:
-                # Test if value is Boolean
-                arm_cfg += config_utils.arm_yaml_test_bool(key, value)
-
-        settings_file.write(arm_cfg)
-        settings_file.close()
-except OSError:
+    # Rewrite arm.yaml with any new template keys and the comments.json comments. Values keep their YAML
+    # types, the write is skipped when nothing changed, and the file is replaced atomically, so another
+    # ARM process starting at the same time never reads a truncated file.
+    with open(os.path.join(cur_cfg["INSTALLPATH"], "arm/ui/comments.json"), "r") as comments_file:
+        comments = json.load(comments_file)
+    config_utils.write_yaml_file(arm_config_path, config_utils.render_arm_yaml(arm_config, comments), arm_config)
+except (OSError, ValueError):
     pass
 
 # abcde config file, open and read contents
