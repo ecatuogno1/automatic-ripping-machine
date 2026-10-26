@@ -141,6 +141,12 @@ COMPLETED_PATH: "/home/arm/media/completed/"
 # For Plex see https://support.plex.tv/hc/en-us/articles/200220677
 EXTRAS_SUB: "extras"
 
+# Add the IMDb id to the movie/series folder and main feature name, if the job has one
+# "jellyfin": "Title (Year) [imdbid-tt0133093]" (Jellyfin)
+# "plex": "Title (Year) {imdb-tt0133093}" (Plex)
+# Leave empty to name them "Title (Year)"
+IMDB_ID_IN_NAME: ""
+
 # Path to installation of ARM
 INSTALLPATH: "/opt/arm/"
 

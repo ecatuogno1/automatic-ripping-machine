@@ -167,9 +167,17 @@ def convert_job_type(video_type):
     return type_sub_folder
 
 
+# IMDB_ID_IN_NAME styles: how the IMDb id is appended to the folder and main feature name
+IMDB_ID_NAME_STYLES = {
+    "jellyfin": " [imdbid-{}]",  # Jellyfin
+    "plex": " {{imdb-{}}}",  # Plex
+}
+
+
 def fix_job_title(job):
     """
     Validate the job title remove/add job year as needed\n
+    Appends the IMDb id if IMDB_ID_IN_NAME is set and the job has one.
     :param job:
     :return: corrected job.title
     """
@@ -183,7 +191,24 @@ def fix_job_title(job):
             job_title = f"{job.title_manual}"
         else:
             job_title = f"{job.title}"
-    return job_title
+    return job_title + imdb_id_suffix(job)
+
+
+def imdb_id_suffix(job):
+    """
+    The IMDb id for the job's name in the IMDB_ID_IN_NAME style, e.g. " [imdbid-tt0133093]"\n
+    :param job:
+    :return: the suffix, or "" if the option is off or the job has no valid IMDb id
+    """
+    style = IMDB_ID_NAME_STYLES.get(str(cfg.arm_config.get("IMDB_ID_IN_NAME") or "").strip().lower())
+    if style is None:
+        return ""
+    # A custom title set without choosing a search result keeps the identified IMDb id,
+    # which may belong to another title - only use an id chosen with the manual title
+    imdb_id = job.imdb_id_manual if job.title_manual else job.imdb_id
+    if not re.fullmatch(r"tt\d{7,10}", str(imdb_id or "")):
+        return ""
+    return style.format(imdb_id)
 
 
 #  ############## Start of post processing functions

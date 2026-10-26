@@ -147,6 +147,7 @@ def customtitle():
         args = {
             'title': request.args.get("title"),
             'title_manual': request.args.get("title"),
+            'imdb_id_manual': None,  # an id chosen earlier belongs to the previous title
             'year': request.args.get("year")
         }
         notification = Notifications(f"Job: {job.job_id} was updated",
