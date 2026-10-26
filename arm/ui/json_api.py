@@ -277,21 +277,29 @@ def process_audio_logfile(logfile, job, job_results):
     """
     # \((track[^[]+)(?!track)
     line = read_all_log_lines(os.path.join(cfg.arm_config["LOGPATH"], logfile))
-    for one_line in line:
-        job_stage_index = re.search(r"\(track([^[]+)", str(one_line))
-        if job_stage_index:
-            try:
-                current_index = f"Track: {job_stage_index.group(1)}/{job.no_of_titles}"
-                job.stage = job_results['stage'] = current_index
-                job.eta = calc_process_time(job.start_time, job_stage_index.group(1), job.no_of_titles)
-                job.progress = round(percentage(job_stage_index.group(1), job.no_of_titles + 1))
-                job.progress_round = round(job.progress)
-            except Exception as error:
-                app.logger.debug("Error processing abcde logfile. Error dump"
-                                 f"-  {error}", exc_info=True)
-                job.stage = "Unknown"
-                job.eta = "Unknown"
-                job.progress = job.progress_round = 0
+    # Only the latest track line matters
+    job_stage_index = find_last_regex_match(r"\(track([^[]+)", line)
+    if job_stage_index:
+        current_track = job_stage_index.group(1).strip()
+        if not job.no_of_titles:
+            # MusicBrainz didn't identify the disc, so the track count is unknown:
+            # show the current track only, there is nothing to base an ETA or progress on
+            job.stage = job_results['stage'] = f"Track: {current_track}"
+            job.eta = "Unknown"
+            job.progress = job.progress_round = 0
+            return job_results
+        try:
+            current_index = f"Track: {current_track}/{job.no_of_titles}"
+            job.stage = job_results['stage'] = current_index
+            job.eta = calc_process_time(job.start_time, current_track, job.no_of_titles)
+            job.progress = round(percentage(current_track, job.no_of_titles + 1))
+            job.progress_round = round(job.progress)
+        except Exception as error:
+            app.logger.debug("Error processing abcde logfile. Error dump"
+                             f"-  {error}", exc_info=True)
+            job.stage = "Unknown"
+            job.eta = "Unknown"
+            job.progress = job.progress_round = 0
     return job_results
 
 
