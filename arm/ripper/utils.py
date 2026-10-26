@@ -513,10 +513,11 @@ def rip_music(job, logfile):
     output_dir, extensions = abcde_outputs(config_text)
     try:
         from arm.ripper import music_brainz
-        expected = len(music_brainz.get_disc_id(job).tracks)
+        disc = music_brainz.get_disc_id(job)
+        expected = len(disc.tracks)
     except Exception as error:  # the track count only strengthens the check
         logging.warning(f"Could not read the disc's track count, output files will not be counted: {error}")
-        expected = None
+        disc = expected = None
     log_path = os.path.join(job.config.LOGPATH, logfile)
     database_updater({"status": JobState.AUDIO_RIPPING.value}, job)
     started = time.time() - 1
@@ -538,9 +539,42 @@ def rip_music(job, logfile):
         error = abcde_output_error(output_dir, extensions, expected, started)
         if error:
             return fail(error)
+    if cfg.arm_config.get("ACCURATERIP_VERIFY"):
+        error = verify_music_rip(job, disc, output_dir, extensions, started)
+        if error:
+            return fail(error)
     database_updater({"status": JobState.IDLE.value}, job)
     logging.info("abcde call successful")
     return True
+
+
+def verify_music_rip(job, disc, output_dir, extensions, started):
+    """
+    Check abcde's FLAC output against AccurateRip (ACCURATERIP_VERIFY)\n
+    The result is logged and sent as a notification. A track that does not match only
+    fails the job when ACCURATERIP_FAIL_ON_MISMATCH is set; a disc that is not in the
+    database, or a lookup that fails, never does.\n
+    :return: an error message when the job should fail, else None
+    """
+    from arm.ripper import accuraterip
+
+    if disc is None or output_dir is None or "flac" not in extensions:
+        logging.warning("AccurateRip verification needs OUTPUTTYPE=flac and an absolute OUTPUTDIR in abcde.conf; "
+                        "tracks not verified")
+        return None
+    try:
+        result = accuraterip.verify(disc, output_dir, started)
+    except accuraterip.AccurateRipError as error:
+        result = {"status": "error"}
+        text = f"AccurateRip: tracks not verified: {error}"
+    else:
+        text = accuraterip.summary(result)
+    logging.info(text)
+    notify(job, NOTIFY_TITLE, f"Music CD: {job.title} {text}")
+    mismatched = any(row["status"] != "match" for row in result.get("tracks", []))
+    if mismatched and cfg.arm_config.get("ACCURATERIP_FAIL_ON_MISMATCH"):
+        return text
+    return None
 
 
 def rip_data(job):

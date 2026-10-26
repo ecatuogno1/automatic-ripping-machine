@@ -105,6 +105,16 @@ METADATA_PROVIDER: "omdb"
 # if "none" is used no label is identified
 GET_AUDIO_TITLE: "musicbrainz"
 
+# Verify ripped music CDs against the AccurateRip database
+# Needs OUTPUTTYPE=flac and an absolute OUTPUTDIR in abcde.conf, and a rip corrected
+# for your drive's read offset (CDPARANOIAOPTS="-O <offset>" in abcde.conf)
+# The result is written to the job log and sent as a notification
+ACCURATERIP_VERIFY: false
+
+# Fail the job when a track does not match AccurateRip (needs ACCURATERIP_VERIFY)
+# A disc that is not in the database, or a failed lookup, never fails the job
+ACCURATERIP_FAIL_ON_MISMATCH: false
+
 # Rip DVD Posters from JACKET_P folder
 # Requires FFmpeg
 RIP_POSTER: false
