@@ -52,6 +52,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = sqlitefile
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # We should really generate a key for each system
 app.config['SECRET_KEY'] = "Big secret key"  # TODO: make this random!
+# A CSRF token is valid for the whole signed-in session. With Flask-WTF's default of one hour, every
+# form or action on a page left open longer was refused, and ARM's pages stay open while discs rip.
+app.config['WTF_CSRF_TIME_LIMIT'] = None
 # Set the global Flask Login state, set to True will ignore any @login_required
 app.config['LOGIN_DISABLED'] = cfg.arm_config['DISABLE_LOGIN']
 app.logger.debug(f"Disable Login: {cfg.arm_config['DISABLE_LOGIN']}")
