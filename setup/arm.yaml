@@ -35,6 +35,11 @@ GET_VIDEO_TITLE: true
 # This is only needed if you would like to send movies to the database
 ARM_API_KEY: ""
 
+# When a DVD is inserted again (same crc64) after its title was set by hand in the ARM ui,
+# give the new job that title (and the year, type, IMDb id and poster chosen with it).
+# false (default) identifies every insert afresh
+REUSE_MANUAL_IDENTITY: false
+
 # Do you want to be forced to login to view/edit jobs
 # True will leave all of the pages open to be editable/viewable by anyone
 # False will require you to login to view/edit jobs or settings from the ui
