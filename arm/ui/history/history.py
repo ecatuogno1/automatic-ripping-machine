@@ -9,6 +9,7 @@ from flask_login import LoginManager, login_required  # noqa: F401
 from flask import render_template, request, Blueprint, session
 
 import arm.ui.utils as ui_utils
+from arm.ui import arr_library
 from arm.ui import app, db
 from arm.models.job import Job
 import arm.config.config as cfg
@@ -45,5 +46,9 @@ def history():
 
     session["page_title"] = "History"
 
-    return render_template('history.html', jobs=jobs.items,
+    # Radarr/Sonarr name per job whose title is already in that app's library
+    in_library = {job.job_id: app_name for job in (jobs.items if jobs else [])
+                  if (app_name := arr_library.in_library(job))}
+
+    return render_template('history.html', jobs=jobs.items, in_library=in_library,
                            date_format=cfg.arm_config['DATE_FORMAT'], pages=jobs)
