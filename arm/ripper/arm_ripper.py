@@ -237,9 +237,28 @@ def rip_with_mkv(current_job, protection=0):
     return mkv_ripped
 
 
+def find_main_feature_file(files, raw_path):
+    """
+    Pick the main feature from the ripped files: the longest video (by ffprobe), with the
+    larger file winning a tie or when the length can't be read.
+    Size alone can pick a high-bitrate extra over the film.
+    :param files: os.listdir(RAW_PATH)
+    :param raw_path: folder the files are in
+    :return: file name, or "" if there are no files
+    """
+    def rank(file):
+        file_path = os.path.join(raw_path, file)
+        probe = ffmpeg.probe_source(file_path)
+        length = max((title["duration"] for title in ffmpeg.parse_probe_output(probe)), default=0) if probe else 0
+        logging.debug(f"{file}: {length} seconds, {os.stat(file_path).st_size} bytes")
+        return length, os.stat(file_path).st_size
+
+    return max(files, key=rank, default="")
+
+
 def skip_transcode_movie(files, job, raw_path):
     """
-    Only ran if job is a movie - find the largest file use it as mainfeature\n
+    Only ran if job is a movie - find the longest file use it as mainfeature\n
     Move everything else to extras folder\n
     If mainfeature is enabled skip moving everything but the main file\n
     :param files: os.listdir(RAW_PATH)
@@ -248,13 +267,11 @@ def skip_transcode_movie(files, job, raw_path):
     :return: None
     """
     logging.debug(f"Videotype: {job.video_type}")
-    # if video_type is movie, then move the biggest title to media_dir
+    # if video_type is movie, then move the longest title to media_dir
     # move the rest of the files to the extras' folder
-    # find largest filesize
-    logging.debug("Finding largest file")
-    largest_file_name = utils.find_largest_file(files, raw_path)
-    # largest_file_name should be the largest file
-    logging.debug(f"Largest file is: {largest_file_name}")
+    logging.debug("Finding longest file")
+    largest_file_name = find_main_feature_file(files, raw_path)
+    logging.debug(f"Main feature is: {largest_file_name}")
     temp_path = os.path.join(raw_path, largest_file_name)
     if os.stat(temp_path).st_size <= 1:  # sanity check for filesize
         logging.info(f"{raw_path} is empty or very small size. - Folder size: {os.stat(temp_path).st_size}")
