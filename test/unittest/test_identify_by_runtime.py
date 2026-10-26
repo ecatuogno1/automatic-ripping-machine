@@ -89,7 +89,8 @@ def test_clearly_closest_runtime_wins():
 def test_nothing_is_confirmed_without_a_single_runtime_match(films, reason):
     chosen, why = identify_runtime.confirm(FakeCatalog(films), "THE_KINGDOM", 93 * 60)
     assert chosen is None
-    assert why == reason
+    # the second pass (identify_loose) finds nothing better in these catalogs
+    assert why.startswith(reason + "; second pass: ")
 
 
 def test_crc64_answer_names_an_unlabelled_disc_when_its_runtime_fits():
