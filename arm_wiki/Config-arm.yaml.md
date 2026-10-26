@@ -24,3 +24,18 @@ They include
 
 
 You can view the full sample file here  [arm.yaml](https://github.com/automatic-ripping-machine/automatic-ripping-machine/blob/main/setup/arm.yaml)
+
+## IMDb id in folder and file names
+
+By default ARM names a movie or series folder, and the main feature file in it, `Title (Year)`. Media servers
+match such names by searching for the title, which can pick the wrong film when titles are shared. Set
+`IMDB_ID_IN_NAME` to add the job's IMDb id in the form your media server reads:
+
+| `IMDB_ID_IN_NAME` | Folder / main feature name           | Read by        |
+|-------------------|--------------------------------------|----------------|
+| `""` (default)    | `The Matrix (1999)`                  |                |
+| `"jellyfin"`      | `The Matrix (1999) [imdbid-tt0133093]` | Jellyfin       |
+| `"plex"`          | `The Matrix (1999) {imdb-tt0133093}`   | Plex           |
+
+The id is only added when the job has one: identified through OMDb or TMDB, or chosen in the web UI title search.
+A title typed in with "Custom title" has no id of its own, so it is named `Title (Year)`.
