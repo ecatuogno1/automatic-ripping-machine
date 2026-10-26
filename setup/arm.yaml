@@ -220,6 +220,13 @@ MKV_ARGS: ""
 # Remove any files created in the raw and transcode paths for the job after processing is complete
 DELRAWFILES: true
 
+# Check the ripped/transcoded video files with ffprobe before they are moved to COMPLETED_PATH.
+# Each file must open, contain video, run about as long as the disc scan said and decode at its end
+# (still-image extras such as galleries are recognised and allowed).
+# If any file fails, the job fails with the reason and its raw/transcode files are not deleted.
+# Needs ffprobe (included with ffmpeg in the ARM docker image); skipped with a warning if it is missing.
+VERIFY_RIP_OUTPUT: false
+
 
 ##########################
 ## HandBrake Parameters ##

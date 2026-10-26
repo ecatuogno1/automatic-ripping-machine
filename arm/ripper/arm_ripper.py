@@ -12,7 +12,7 @@ from pathlib import Path
 if find_spec("arm") is None:
     sys.path.append(str(Path(__file__).parents[2]))
 
-from arm.ripper import utils, makemkv, handbrake, ffmpeg  # noqa E402
+from arm.ripper import utils, makemkv, handbrake, ffmpeg, verify  # noqa E402
 from arm.ui import app, db, constants  # noqa E402
 from arm.models.job import JobState  # noqa E402
 
@@ -76,6 +76,9 @@ def rip_visual_media(have_dupes, job, logfile, protection):
     if job.config.SKIP_TRANSCODE and use_make_mkv:
         utils.delete_raw_files([transcode_out_path])
         transcode_out_path = transcode_in_path
+
+    # If set in the arm.yaml check the output before anything is moved, deleted or reported as complete
+    verify.verify_rip_output(job, transcode_out_path)
 
     # Update final path if user has set a custom/manual title
     logging.debug(f"Job title status: [{job.title_manual}]")
