@@ -498,6 +498,19 @@ class MakeMkvStalledError(MakeMkvRuntimeError):
         RuntimeError.__init__(self, self.message)
 
 
+class MakeMkvRipFailed(MakeMkvRuntimeError):
+    """
+    Exception raised by rip_pass() (when MAKEMKV_READ_RETRIES is set) for a rip pass that failed for good.
+    """
+
+    def __init__(self, failure, attempts):
+        self.failure_class = failure
+        tried = f"after {attempts} attempts" if attempts > 1 else "not retried"
+        self.message = f"MakeMKV rip failed: {failure.value} ({tried})"
+        logging.error(self.message)
+        RuntimeError.__init__(self, self.message)
+
+
 def parse_content(content, num_header, num_message):
     """
     Helper Function to parse the MakeMKV Messages
@@ -667,7 +680,7 @@ def makemkv_backup(job, rawpath):
         rawpath,
     ]
     logging.info("Backing up disc")
-    collections.deque(run(cmd, OutputType.MSG), maxlen=0)
+    rip_pass(cmd, rawpath)
 
 
 def makemkv_mkv(job, rawpath):
@@ -721,7 +734,7 @@ def makemkv_mkv(job, rawpath):
             f"--minlength={job.config.MINLENGTH}",
         ]
         logging.info("Process all tracks from disc.")
-        collections.deque(run(cmd, OutputType.MSG), maxlen=0)
+        rip_pass(cmd, rawpath)
     else:
         process_single_tracks(job, rawpath, 'auto')
 
@@ -802,7 +815,7 @@ def rip_mainfeature(job, track, rawpath):
     ]
     logging.info("Ripping main feature")
     # Possibly update db to say track was ripped
-    collections.deque(run(cmd, OutputType.MSG), maxlen=0)
+    rip_pass(cmd, rawpath)
 
 
 def process_single_tracks(job, rawpath, mode: str):
@@ -868,7 +881,7 @@ def process_single_tracks(job, rawpath, mode: str):
                 f.write(f"\nBINF:{int(time())},{process_index},{len(tracks_to_process)},0000")
 
         logging.debug("Starting to rip single track.")
-        collections.deque(run(cmd, OutputType.MSG), maxlen=0)
+        rip_pass(cmd, rawpath)
         process_index += 1
 
 
@@ -1321,7 +1334,61 @@ def _progress_file(options):
     return None
 
 
+class FailureClass(enum.Enum):
+    """Why a MakeMKV call failed, as far as its messages tell. Used by rip_pass() to decide on a retry."""
+    LICENCE = "the MakeMKV key or evaluation period has expired"
+    DISC_REMOVED = "the disc was removed or the tray was opened"
+    WRITE_ERROR = "MakeMKV could not write its output (check free space and permissions)"
+    STALLED = "MakeMKV made no progress (STALL_ABORT_SECONDS)"
+    READ_ERROR = "the disc could not be read"
+    OTHER = "MakeMKV failed"
+
+
+FAILURE_ORDER = list(FailureClass)
+"""Most decisive first: a failure with an expired key and read errors is a licence failure."""
+RETRYABLE = {FailureClass.READ_ERROR, FailureClass.STALLED}
+MAKEMKV_RETRY_DELAY = 10  # [s]
+"""Pause before a retry so the drive can settle."""
+
+
+def message_evidence(message):
+    """The FailureClass a MakeMKV message points to, or None"""
+    if message.code in (MessageID.EVALUATION_PERIOD_EXPIRED_APP_TOO_OLD, MessageID.EVALUATION_PERIOD_EXPIRED_SHAREWARE):
+        return FailureClass.LICENCE
+    if message.code == MessageID.READ_ERROR:
+        text = message.message.lower()
+        if "tray open" in text or "medium not present" in text:
+            return FailureClass.DISC_REMOVED
+        return FailureClass.READ_ERROR
+    if message.code == MessageID.RIP_DISC_OPEN_ERROR:
+        return FailureClass.READ_ERROR
+    if message.code == MessageID.WRITE_ERROR:
+        return FailureClass.WRITE_ERROR
+    return None
+
+
+def failure_class(error, evidence):
+    """Classify a failed MakeMKV call from the error and the classes its messages pointed to"""
+    if isinstance(error, MakeMkvStalledError):
+        evidence = evidence | {FailureClass.STALLED}
+    return next((c for c in FAILURE_ORDER if c in evidence), FailureClass.OTHER)
+
+
 def run(options, select):
+    """
+    Run makemkv with input cli options and yield selected messages (see _run)
+
+    A MakeMkvRuntimeError raised here carries ``failure_class`` (FailureClass).
+    """
+    evidence = set()
+    try:
+        yield from _run(options, select, evidence)
+    except MakeMkvRuntimeError as error:
+        error.failure_class = failure_class(error, evidence)
+        raise
+
+
+def _run(options, select, evidence):
     """
     Run makemkv with input cli options and yield selected messages
 
@@ -1371,6 +1438,8 @@ def run(options, select):
                     buffer.append(line)
                     continue
                 logging.debug(data)
+                if isinstance(data, MakeMKVMessage) and (found := message_evidence(data)):
+                    evidence.add(found)
                 if msg_type in select:
                     yield data
     if watchdog and watchdog.stalled:
@@ -1381,6 +1450,66 @@ def run(options, select):
         logging.warning(f"Cannot parse {len(buffer)} lines: {os.linesep.join(buffer)}")
         raise MakeMkvRuntimeError(proc.returncode, cmd, output=os.linesep.join(buffer))
     logging.info("MakeMKV exits gracefully.")
+
+
+def makemkv_read_retries():
+    """MAKEMKV_READ_RETRIES from arm.yaml (0-5); 0, empty or an invalid value turns retries off"""
+    value = cfg.arm_config.get("MAKEMKV_READ_RETRIES")
+    try:
+        return min(5, max(0, int(value or 0)))
+    except (TypeError, ValueError):
+        logging.warning(f"Ignoring invalid MAKEMKV_READ_RETRIES value: {value!r}")
+        return 0
+
+
+def rip_pass(cmd, rawpath):
+    """
+    Run one MakeMKV rip pass (backup or mkv) into ``rawpath``.
+
+    With MAKEMKV_READ_RETRIES set, a pass that failed with a read error or a stall is run again in the same
+    drive, after removing what the failed attempt wrote to ``rawpath``. Other failures (expired key, disc
+    removed, write errors, unknown) are never retried. When retries are on, a final failure is raised as a
+    MakeMkvRuntimeError that says why and how often it was tried.
+    """
+    retries = makemkv_read_retries()
+    attempt = 1
+    while True:
+        before = _entries(rawpath)
+        try:
+            collections.deque(run(cmd, OutputType.MSG), maxlen=0)
+            return
+        except MakeMkvRuntimeError as error:
+            if not retries:
+                raise
+            failure = getattr(error, "failure_class", FailureClass.OTHER)
+            if failure not in RETRYABLE or attempt > retries:
+                raise MakeMkvRipFailed(failure, attempt) from error
+            logging.warning(f"MakeMKV rip failed: {failure.value}. "
+                            f"Retrying in the same drive ({attempt} of {retries}) in {MAKEMKV_RETRY_DELAY}s")
+            _remove_new_entries(rawpath, before)
+            attempt += 1
+            sleep(MAKEMKV_RETRY_DELAY)
+
+
+def _entries(path):
+    try:
+        return set(os.listdir(path))
+    except OSError:
+        return set()
+
+
+def _remove_new_entries(path, before):
+    """Remove what a failed attempt added to ``path`` so the retry starts from the same state"""
+    for name in sorted(_entries(path) - before):
+        entry = os.path.join(path, name)
+        logging.info(f"Removing {entry} left by the failed attempt")
+        try:
+            if os.path.isdir(entry) and not os.path.islink(entry):
+                shutil.rmtree(entry)
+            else:
+                os.remove(entry)
+        except OSError as error:
+            logging.warning(f"Could not remove {entry}: {error}")
 
 
 def manual_wait(job) -> bool:
