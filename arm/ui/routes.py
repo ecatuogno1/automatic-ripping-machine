@@ -59,6 +59,7 @@ def home():
     # Get system details from Server Info and Config
     server = SystemInfo.query.filter_by(id="1").first()
     serverutil = ServerUtil()
+    raw_path = cfg.arm_config['RAW_PATH']
     arm_path = cfg.arm_config['TRANSCODE_PATH']
     media_path = cfg.arm_config['COMPLETED_PATH']
 
@@ -86,7 +87,7 @@ def home():
                            jobs=jobs,
                            children=cfg.arm_config['ARM_CHILDREN'],
                            server=server, serverutil=serverutil,
-                           arm_path=arm_path, media_path=media_path, stats=stats)
+                           raw_path=raw_path, arm_path=arm_path, media_path=media_path, stats=stats)
 
 
 @app.route('/error')

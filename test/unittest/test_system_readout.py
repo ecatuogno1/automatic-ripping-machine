@@ -98,6 +98,7 @@ def test_unreadable_storage_path_is_not_reported_as_full(monkeypatch):
 
 def test_panel_renders_unmeasured_figures():
     serverutil = types.SimpleNamespace(cpu_util=None, cpu_temp=None, memory_free=1, memory_used=1, memory_percent=50,
+                                       storage_raw_free=3.0, storage_raw_percent=20,
                                        storage_transcode_free=None, storage_transcode_percent=None,
                                        storage_completed_free=2.0, storage_completed_percent=10)
     server = types.SimpleNamespace(name="ARM", description="", cpu="CPU", mem_total=2)
