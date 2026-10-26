@@ -43,3 +43,30 @@ your A.R.M. installation URL, choose "Arm Settings" from the navigation bar, go 
 down to the MKV_ARGS field. In this field enter `--profile=/<path-to-your-custom-makemkv-profile.mmcp.xml>` Note that 
 the file location must be accessible by the arm user and must be owned by the arm user (or at the very least readable). 
 It is recommended to place it in the `/home/arm/` directory.
+
+## Reading a DVD once (`READ_ONCE_DVD`)
+When MakeMKV rips every title of a DVD (`RIPMETHOD: "mkv"`, `MAINFEATURE: false`), it opens and reads each title
+from the disc separately. Titles on a DVD share video cells, so the drive seeks back and forth and reads the same
+parts of the disc several times. On worn discs and slow drives this is the slowest part of a rip.
+
+With `READ_ONCE_DVD: true` A.R.M. instead:
+
+1. copies the whole disc (the decrypted `VIDEO_TS` folder, menus included) into a new folder in `RAW_PATH` with
+   [dvdbackup](https://dvdbackup.sourceforge.net/), in one sequential pass;
+2. checks the copy (`VIDEO_TS.IFO` and every title set's navigation file are valid, no member is empty);
+3. lets MakeMKV make the titles from the copy (`file:` source) with the usual `MKV_ARGS`, `MINLENGTH`, `MAXLENGTH`,
+   `MAINFEATURE` and manual-mode track selection;
+4. removes the copy. The MKV files land in the job's raw folder, named after the disc label, and the rest of the
+   job (transcode, move, notifications) runs as for a rip from the disc.
+
+If the copy can't be made (dvdbackup missing, not enough space, a read error, an incomplete copy) A.R.M. logs the
+reason, removes the partial copy and rips the titles from the disc as usual. If the copy was made but MakeMKV fails
+on it, the copy is kept in `RAW_PATH` (the log names the folder) and the titles are ripped from the disc.
+
+Requirements and limits:
+* `dvdbackup` must be installed (`apt install dvdbackup`); it decrypts with the same libdvdcss that HandBrake uses.
+* `RAW_PATH` needs free space for about twice the disc size (the copy plus the titles).
+* Discs with 99-title protection are always ripped from the disc, because their deliberately unreadable sectors
+  stop dvdbackup.
+* Blu-ray discs are not affected; `RIPMETHOD: "backup"` already copies a Blu-ray once and transcodes from the copy.
+  MakeMKV's `backup` mode does not copy DVDs, which is why dvdbackup is used here.
