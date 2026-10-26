@@ -31,6 +31,11 @@ UMASK: 0o002
 # For BluRays attempts to extract the title from an XML file on the disc
 GET_VIDEO_TITLE: true
 
+# Keep the spaces in titles found by the metadata lookup and in Blu-ray disc titles, so folders and files
+# are named "The Matrix (1999)". false (default) joins the words with dashes: "The-Matrix (1999)".
+# Titles are always searched with spaces, whichever you choose
+TITLE_SPACES: false
+
 # ARM dvd crc64 api key
 # This is only needed if you would like to send movies to the database
 ARM_API_KEY: ""

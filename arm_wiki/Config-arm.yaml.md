@@ -24,3 +24,12 @@ They include
 
 
 You can view the full sample file here  [arm.yaml](https://github.com/automatic-ripping-machine/automatic-ripping-machine/blob/main/setup/arm.yaml)
+
+## Spaces or dashes in titles (TITLE_SPACES)
+
+When ARM names a job from the metadata lookup (OMDb/TMDB) or from a Blu-ray's disc title, it joins the words
+with dashes, so folders and files are named `The-Matrix (1999)`. Set `TITLE_SPACES: true` to keep the spaces
+instead: `The Matrix (1999)`. Titles you set yourself in the web UI already keep their spaces.
+
+The default is `false`, so existing libraries keep their naming. Whichever you choose, ARM replaces `_`, `-` and
+`+` with spaces when it searches for a title, because the providers match `The Batman` but not always `The-Batman`.
