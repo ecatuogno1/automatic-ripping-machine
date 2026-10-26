@@ -890,6 +890,11 @@ def check_for_wait(job):
     :param job: Current Job
     :return: None
     """
+    # MANUAL_WAIT_SKIP_VERIFIED: an identity confirmed by IDENTIFY_BY_RUNTIME needs no override
+    if job.config.MANUAL_WAIT and cfg.arm_config.get("MANUAL_WAIT_SKIP_VERIFIED", False) \
+            and getattr(job, "identity_verified", False):
+        logging.info("Identity confirmed by the disc runtime; skipping the manual identification wait.")
+        return
     #  If we have waiting for user input enabled
     if job.config.MANUAL_WAIT:
         logging.info(f"Waiting {job.config.MANUAL_WAIT_TIME} seconds for manual override.")
