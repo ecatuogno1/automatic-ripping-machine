@@ -156,6 +156,22 @@ def main():
         logging.critical("Couldn't identify the disc type. Exiting without any action.")
 
 
+def require_current_db(arminfo):
+    """
+    Stop before the job starts if the database schema is not the one this ARM version expects
+
+    The web UI only upgrades the database when the user confirms it, so after an ARM update the
+    ripper could start a job against the old schema (#1485).
+    """
+    if arminfo.head_version == "unknown":
+        logging.warning("Could not read ARM's database migration head. Skipping the database version check.")
+        return
+    if arminfo.db_version != arminfo.head_version:
+        raise utils.RipperException(
+            f"The ARM database needs to be updated (database version: {arminfo.db_version}, "
+            f"expected: {arminfo.head_version}). Open the ARM web UI to update it, then insert the disc again.")
+
+
 def setup():
     global job
     global args
@@ -176,6 +192,9 @@ def setup():
     arm_log = logger.create_early_logger(syslog=args.syslog)
     # Make sure all directories are fully setup
     utils.arm_setup(arm_log)
+    # Capture the ARM Info, and don't start a job against an out-of-date database
+    arminfo = ARMInfo(cfg.arm_config["INSTALLPATH"], cfg.arm_config['DBFILE'])
+    require_current_db(arminfo)
     drive = SystemDrives.query.filter_by(mount=devpath).one()  # unique mounts
 
     # With some drives and some disks, there is a race condition between creating the Job()
@@ -196,8 +215,7 @@ def setup():
     # Setup logging
     log_file = logger.setup_job_log(job)
 
-    # Capture and report the ARM Info
-    arminfo = ARMInfo(cfg.arm_config["INSTALLPATH"], cfg.arm_config['DBFILE'])
+    # Report the ARM Info
     job.arm_version = arminfo.arm_version
     arminfo.get_values()
 
