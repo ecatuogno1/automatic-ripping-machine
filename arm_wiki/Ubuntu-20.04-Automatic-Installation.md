@@ -24,7 +24,7 @@ The script defaults to installing a live version of ARM~~~, but includes a `-d` 
 To install ARM LIVE: `sudo ./DebianInstaller.sh`  
 ~~To install ARM DEV: `sudo ./ubuntu-20.04-install.sh -d`~~
 
-After the script finishes, Firefox should open to `http:<machine_ip>:8080/setup` and prompt the user to create an admin account. If this doesn't happen, check the installer console log for error messages.
+After the script finishes, open `http:<machine_ip>:8080` and sign in as `admin` with the password printed in the ARM UI's log (see the notes below). If the page doesn't load, check the installer console log for error messages.
 
 ## Post Install - LIVE
 No live-specific post installation steps are needed
@@ -47,7 +47,12 @@ No live-specific post installation steps are needed
 ### Notes
 If you terminate a debugging run early, run `mount /dev/sr0` to make sure the disk is mounted before the next run. ARM will break if the disk is not mounted. 
 
-The default username and password is
+On its first start ARM creates the `admin` account with a random password and prints it once to the
+ARM UI's log. Find it with
 
-- Username: admin 
-- Password: password
+```
+sudo journalctl -u armui | grep -A3 'ARM first run'
+```
+
+Sign in as `admin` with that password, then change it (Change admin password). Installs set up before this
+change keep their existing password.

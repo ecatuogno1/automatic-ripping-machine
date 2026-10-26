@@ -54,11 +54,14 @@ docker run -d \
     --restart "always" \
     --name "automatic-ripping-machine"
 ```
-### Finally -  Open localhost:8080/setup, then login to the account
+### Finally -  Open localhost:8080, then login to the account
 
-The default username and password:
+On its first start ARM creates the `admin` account with a random password and prints it once to the container log:
+```
+docker logs automatic-ripping-machine 2>&1 | grep -A3 'ARM first run'
+```
 username: admin
-password: password
+password: the one printed in the log
 
 ** It is strongly recommended you change this using the change password page **
 A.R.M should now be fully setup, and ripping should start when a disc is inserted.

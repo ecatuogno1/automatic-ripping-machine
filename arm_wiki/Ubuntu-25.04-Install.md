@@ -120,10 +120,15 @@ sudo systemctl start armui
 ## Post install
 You should now have the ARM UI running at http://localhost:8080
 
-The default username and password is
+On its first start ARM creates the `admin` account with a random password and prints it once to the
+ARM UI's log. Find it with
 
-- Username: admin 
-- Password: password
+```
+sudo journalctl -u armui | grep -A3 'ARM first run'
+```
+
+Sign in as `admin` with that password, then change it (Change admin password). Installs set up before this
+change keep their existing password.
 
 Alternatively, you can insert a disc or trigger it manually by running 
 ```

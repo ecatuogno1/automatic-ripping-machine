@@ -27,18 +27,15 @@ sudo chmod +x /opt/arm/scripts/update_key.sh
 ## Post install
 
 ### Setting up the database
-You will need to visit your http://WEBSERVER_IP:WEBSERVER_PORT/setup  
-							&#x26A0; &#x26A0; **!!!WARNING!!!** &#x26A0; &#x26A0;  					
+The ARM UI creates its database on its first start. It also creates the `admin` account with a random password
+and prints it once to the ARM UI's log. Find it with
 
-Visiting this page will delete your current database and create a new db file. You WILL lose jobs/tracks/etc from your database
-This will set up the new database, and ask you to make an admin account. Because of the changes to the armui it's not possible to view/change/delete entries without logging in. 
-Due to these large number of changes to the database it's not currently possible to upgrade without creating a new database, this may change later
-but for now you will lose all previous jobs/tracks/configs.
+```
+sudo journalctl -u armui | grep -A3 'ARM first run'
+```
 
-Once it has deleted the current database, it will redirect you to sign in. The default username and password is
-
-- Username: admin 
-- Password: password
+Sign in as `admin` with that password, then change it (Change admin password). Installs set up before this
+change keep their existing password. `/setup` is only available while no user exists.
 
 
 Alternatively, you can insert a disc or trigger it manually by running 

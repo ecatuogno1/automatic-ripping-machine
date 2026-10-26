@@ -3,7 +3,9 @@ Main catch all page for functions for the A.R.M ui
 """
 import hashlib
 import os
+import secrets
 import shutil
+import sys
 import json
 import platform
 import subprocess
@@ -399,6 +401,18 @@ def generate_arm_cat(full_path):
                 sleep(1)
 
 
+def announce_first_login(first_login):
+    """
+    Print the first-run admin login once to stderr (the container log, or the armui service journal).
+    Only its bcrypt hash is stored, so this is the only time it can be seen.
+    """
+    print("ARM first run: created the admin account. Sign in to the web UI with\n"
+          "    username: admin\n"
+          f"    password: {first_login}\n"
+          "Change it after signing in (Change admin password). This password is not shown again.",
+          file=sys.stderr, flush=True)
+
+
 def setup_database():
     """
     Try to get the db.User if not we nuke everything
@@ -423,9 +437,11 @@ def setup_database():
         db.session.commit()
         # UI Config
         # UI config is already set within the alembic migration file - 9cae4aa05dd7_create_settingsui_table.py
-        # Create default user to save problems with ui and ripper having diff setups
+        # Create the admin user to save problems with ui and ripper having diff setups.
+        # Its password is random and shown once on the console: a fixed default is known to everyone.
+        first_login = secrets.token_urlsafe(15)
         hashed = bcrypt.gensalt(12)
-        default_user = User(email="admin", password=bcrypt.hashpw("password".encode('utf-8'), hashed), hashed=hashed)
+        default_user = User(email="admin", password=bcrypt.hashpw(first_login.encode('utf-8'), hashed), hashed=hashed)
         app.logger.debug("DB Init - Admin user loaded")
         db.session.add(default_user)
         # Server config
@@ -433,6 +449,7 @@ def setup_database():
         db.session.add(server)
         app.logger.debug("DB Init - Server info loaded")
         db.session.commit()
+        announce_first_login(first_login)
         # Scan and load drives to database
         DriveUtils.drives_update()
         app.logger.debug("DB Init - Drive info loaded")

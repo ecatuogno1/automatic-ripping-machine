@@ -109,11 +109,19 @@ The script will now:
 5. **Start ARM**: Run the container with `sudo ./start_arm_container.sh`
 
 You will then need to visit http://WEBSERVER_IP:PORT
-An admin account is required to view rips and settings. A default one has been created for you.
+An admin account is required to view rips and settings. One is created on the first start, with a random password
+that is printed once to the container log:
+
+```
+docker logs arm-rippers 2>&1 | grep -A3 'ARM first run'
+```
+
+(`arm-rippers` is the name `start_arm_container.sh` gives the container; use yours if you changed it.)
 
 **Username**: admin
 
-**Password**: password
+**Password**: the one printed in the log. Change it after signing in. Installs set up before this change keep their
+existing password.
 
 
 ## Updating docker image
