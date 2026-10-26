@@ -16,7 +16,7 @@ import xml.parsers.expat
 import arm.config.config as cfg
 from arm.models import Job
 
-from arm.ripper import utils
+from arm.ripper import utils, game_disc
 from arm.ripper.ProcessHandler import arm_subprocess
 from arm.ui import db
 
@@ -69,6 +69,9 @@ def identify(job):
     if mounted:
         # Check with the job class to get the correct disc type
         job.get_disc_type(utils.find_file("HVDVD_TS", job.mountpoint))
+
+    # A data disc, or a video disc that would not mount, may be a game disc
+    game_disc.check(job, mounted)
 
     if job.disctype in ["dvd", "bluray"]:
 
