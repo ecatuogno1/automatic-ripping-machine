@@ -20,7 +20,6 @@ from flask.logging import default_handler  # noqa: F401
 from flask_login import current_user
 
 import arm.config.config as cfg
-from arm.config.config_utils import arm_yaml_test_bool
 from arm.config import config_utils
 from arm.models.alembic_version import AlembicVersion
 from arm.models.job import Job
@@ -688,39 +687,24 @@ def build_arm_cfg(form_data, comments):
     return arm_cfg
 
 
-def build_apprise_cfg(form_data):
+def save_arm_cfg(values):
+    """
+    Write ``values`` as the new arm.yaml (validated and atomic)\n
+    :param values: the full settings dict
+    :raises OSError: arm.yaml can't be written
+    :raises ValueError: the values would not load back unchanged; arm.yaml is left as it was
+    """
+    config_utils.write_yaml_file(cfg.arm_config_path,
+                                 config_utils.render_arm_yaml(values, generate_comments()), values)
+
+
+def build_apprise_cfg(values):
     """
     Main function for saving new updated apprise.yaml\n
-    :param form_data: post data
-    :return: full new arm.yaml as a String
+    :param values: the full apprise settings dict (see config_utils.merge_form)
+    :return: full new apprise.yaml as a String
     """
-    # This really should be hard coded.
-    app.logger.debug("save_apprise: START")
-    apprise_cfg = "\n\n"
-    for key, value in form_data.items():
-        # Skip the Cross Site Request Forgery (CSRF) token
-        if key == "csrf_token":
-            continue
-        # Strip whitespace from values to prevent issues with keys/values
-        if isinstance(value, str):
-            value = value.strip()
-        # Check if value contains "KEY" or "API" (any case)
-        if re.search(r"KEY|API|PASS|TOKEN|SECRET", key):
-            key_value = "####--redacted--####"
-        else:
-            key_value = value
-        # Print output
-        app.logger.debug(f"save_settings: [{key}] = {key_value} ")
-
-        # test if key value is an int
-        try:
-            post_value = int(value)
-            apprise_cfg += f"{key}: {post_value}\n"
-        except ValueError:
-            # Test if value is Boolean
-            apprise_cfg += arm_yaml_test_bool(key, value)
-    app.logger.debug("save_apprise: FINISH")
-    return apprise_cfg
+    return config_utils.render_plain_yaml(values)
 
 
 def get_processor_name():
