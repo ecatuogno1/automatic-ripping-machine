@@ -38,6 +38,7 @@
   "TRANSCODE_PATH": "# Intermediary directory for transcoding files\n# Destination for HandBrake",
   "COMPLETED_PATH": "# Final directory of transcoded files\n# Ripped and transcoded files end up here",
   "EXTRAS_SUB": "# Movie subdirectory name for \"extras\"\n# Valid names are dependent on your media server\n# For Emby see https://github.com/MediaBrowser/Wiki/wiki/Movie%20naming#user-content-movie-extras\n# For Plex see https://support.plex.tv/hc/en-us/articles/200220677",
+  "IMDB_ID_IN_NAME": "# Add the IMDb id to the movie/series folder and main feature name, if the job has one\n# \"jellyfin\": \"Title (Year) [imdbid-tt0133093]\" (Jellyfin)\n# \"plex\": \"Title (Year) {imdb-tt0133093}\" (Plex)\n# Leave empty to name them \"Title (Year)\"",
   "INSTALLPATH": "# Path to installation of ARM ",
   "LOGPATH": "# Path to directory to hold log files\n# Make sure to include trailing /",
   "LOGLEVEL": "# Log level.  DEBUG, INFO, WARNING, ERROR, CRITICAL\n# The default is INFO\n# If you are experiencing difficulties set this to DEBUG",
