@@ -48,6 +48,9 @@ def get_x_jobs(job_status):
     else:
         raise ValueError(f"{job_status} is not a valid option")
 
+    # Get authentication state
+    authenticated = authenticated_state()
+
     job_results = {}
     i = 0
     for j in jobs:
@@ -63,19 +66,39 @@ def get_x_jobs(job_status):
         for key, value in j.get_d().items():
             if key != "config":
                 job_results[i][str(key)] = str(value)
+        if not authenticated:
+            job_results[i] = public_job(job_results[i])
         i += 1
     if jobs:
         app.logger.debug("jobs  - we have " + str(len(job_results)) + " jobs")
         success = True
-
-    # Get authentication state
-    authenticated = authenticated_state()
 
     return {"success": success,
             "mode": job_status,
             "results": job_results,
             "arm_name": cfg.arm_config['ARM_NAME'],
             "authenticated": authenticated}
+
+
+# What a job card shows to a client that is not signed in (including another ARM's home page polling
+# this one through ARM_CHILDREN): the job's progress, not its paths, log file, errors or configuration.
+PUBLIC_JOB_FIELDS = frozenset({
+    "job_id", "title", "title_manual", "year", "video_type", "disctype", "devpath", "status", "stage",
+    "progress", "progress_round", "eta", "cur_fps", "avg_fps", "start_time", "job_length", "poster_url",
+})
+PUBLIC_JOB_CONFIG = ("RIPMETHOD", "MAINFEATURE", "MINLENGTH", "MAXLENGTH")
+
+
+def public_job(job_result):
+    """
+    Reduce one job-list entry to the fields a job card needs, for a client that is not signed in
+    :param job_result: one job's entry built by get_x_jobs
+    :return: dict with the card's fields and its four rip settings
+    """
+    public = {key: value for key, value in job_result.items() if key in PUBLIC_JOB_FIELDS}
+    config = job_result.get("config")
+    public["config"] = {key: config.get(key) for key in PUBLIC_JOB_CONFIG} if isinstance(config, dict) else {}
+    return public
 
 
 def process_logfile(logfile, job, job_results):
