@@ -14,7 +14,7 @@ import json
 from pathlib import Path, PurePath
 from werkzeug.exceptions import HTTPException
 from flask import Flask, render_template, request, flash, \
-    redirect, url_for, session   # noqa: F401
+    redirect, url_for, session, abort   # noqa: F401
 from flask.logging import default_handler  # noqa: F401
 from flask_login import LoginManager, login_required, \
     current_user, login_user, logout_user  # noqa: F401
@@ -131,7 +131,15 @@ def setup():
 
     This function will do various checks to make sure everything can be setup for ARM
     Directory ups, create the db, etc
+
+    Closed (404) once any user exists, so it can't be used to recreate the admin account.
     """
+    try:
+        if User.query.first() is not None:
+            app.logger.warning("Refused /setup: ARM is already set up")
+            abort(404)
+    except SQLAlchemyError:
+        db.session.rollback()  # no user table yet: a first run
     # perm_file = Path(PurePath(cfg.arm_config['INSTALLPATH'], "installed"))
     # app.logger.debug("perm " + str(perm_file))
     # # Check for install file and that db is correctly setup
