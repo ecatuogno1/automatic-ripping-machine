@@ -162,7 +162,10 @@
                                 </tr>
                                 <tr>
                                     <td style="text-align:left"><strong>status</strong></td>
-                                    <td style="text-align:left">{{ jobs.status }}</td>
+                                    <td style="text-align:left">{{ jobs.status }}
+                                        {% if in_library %}
+                                        <span class="badge badge-success" title="{{ in_library }} has a file for this title">In library</span>
+                                        {% endif %}</td>
                                 </tr>
                                 <tr>
                                     <td style="text-align:left"><strong>video_type</strong></td>

@@ -43,6 +43,13 @@ library and leaves the rest. Check the app's **Activity** and **System > Events*
 Sonarr needs episode numbers it can parse from the file names, which MakeMKV's title names usually don't have, so
 series rips often need a manual import.
 
+## "In library" label
+
+With Radarr or Sonarr configured, the History page and the job details page show an **In library** label on a
+successful job when Radarr has a file for that movie, or Sonarr has at least one episode file for that series.
+Titles are matched by the job's IMDb id, so jobs without one never get the label. ARM reads each app's list at most
+every two minutes; if the app can't be reached, the label is simply not shown.
+
 ## Docker and different paths
 
 The app opens the folder ARM gives it, so it must see the same files. If ARM and the app run in different containers
