@@ -27,7 +27,7 @@ import arm.config.config as cfg  # noqa E402
 from arm.models.config import Config  # noqa: E402
 from arm.models.job import Job, JobState  # noqa: E402
 from arm.models.system_drives import SystemDrives  # noqa: E402
-from arm.ripper import (arm_ripper, identify, logger,  # noqa: E402
+from arm.ripper import (arm_ripper, arr, identify, logger,  # noqa: E402
                         music_brainz, utils)
 from arm.ripper.ARMInfo import ARMInfo  # noqa E402
 from arm.ui import app, constants, db  # noqa E402
@@ -135,6 +135,7 @@ def main():
         if utils.rip_music(job, log_file):
             utils.notify(job, constants.NOTIFY_TITLE, f"Music CD: {job.title} {constants.PROCESS_COMPLETE}")
             utils.scan_emby()
+            arr.import_job(job)
             # This shouldn't be needed. but to be safe
             job.status = JobState.SUCCESS.value
             db.session.commit()

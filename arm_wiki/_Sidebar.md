@@ -36,6 +36,7 @@
       - [Skins for ARM ui](Config-ui-skins)
       - [MakeMKV](MakeMKV-Info)
       - [FFmpeg Alternative Transcoder](ffmpeg.md)
+      - [Radarr, Sonarr and Lidarr import](Config-Radarr-Sonarr-Lidarr)
      
    - **Alternate Installations**
      - [Ubuntu](Alternate-Install-Ubuntu)
