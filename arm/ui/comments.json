@@ -87,6 +87,7 @@
   "LIDARR_API_KEY": "# Lidarr API key, found in Lidarr under Settings > General > Security",
   "ARR_IMPORT_MODE": "# How Radarr/Sonarr/Lidarr import the files: \"Move\" (into the library, removing ARM's copy) or \"Copy\"",
   "ARR_PATH_MAP": "# Only needed when Radarr/Sonarr/Lidarr see ARM's folders under a different path (e.g. other Docker volumes).\n# One or more \"ARM path=app path\" pairs separated by \";\", for example\n# \"/home/arm/media/completed=/data/completed;/home/arm/music=/data/music\"",
+  "ARR_IDENTIFY": "# Also identify discs with the Radarr/Sonarr lookup when OMDb/TMDB find nothing (true/false).\n# Uses RADARR_URL/RADARR_API_KEY and SONARR_URL/SONARR_API_KEY above, and only accepts a title\n# that matches the disc's title exactly.",
   "NOTIFY_RIP": "# Notify after Rip?",
   "NOTIFY_TRANSCODE": "# Notify after transcode?",
   "NOTIFY_JOBID": "# Add Job ID to Notification Title",
